@@ -45,8 +45,11 @@ object AppModule {
 
     @Provides
     @Singleton
-    fun walletRepository(dao: WalletDao, keys: DeviceKeys): WalletRepository =
-        WalletRepository(dao, keys)
+    fun walletRepository(
+        dao: WalletDao,
+        keys: DeviceKeys,
+        log: com.mateof.passvault.sync.OperationLog,
+    ): WalletRepository = WalletRepository(dao, keys, log)
 
     @Provides
     @Singleton

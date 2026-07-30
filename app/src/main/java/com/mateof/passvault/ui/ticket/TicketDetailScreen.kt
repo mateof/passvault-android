@@ -53,9 +53,16 @@ fun TicketDetailScreen(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(spacing.medium),
     ) {
-        if (detail.barcodeFormat != null && detail.barcodeValue != null) {
-            BarcodeImage(format = detail.barcodeFormat, payload = detail.barcodeValue)
-            // The payload in text too. When a scanner will not read — a scratched screen, bad
+        if (detail.barcodeValue != null) {
+            // The image needs a symbology; the payload does not. A ticket that arrived without a
+            // declared format used to render nothing at all — no image and no text — so a perfectly
+            // good ticket looked empty, and the holder would have found out at the gate. The
+            // symbology is not guessed: drawing a QR for what was actually a PDF417 produces
+            // something that looks scannable and is not, which is worse than no image.
+            if (detail.barcodeFormat != null) {
+                BarcodeImage(format = detail.barcodeFormat, payload = detail.barcodeValue)
+            }
+            // The payload in text either way. When a scanner will not read — a scratched screen, bad
             // light, an old reader — somebody on the door types it in, and that is the difference
             // between getting in and not.
             Text(
@@ -64,6 +71,14 @@ fun TicketDetailScreen(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center,
             )
+            if (detail.barcodeFormat == null) {
+                Text(
+                    text = stringResource(R.string.ticket_no_format),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.secondary,
+                    textAlign = TextAlign.Center,
+                )
+            }
         }
 
         Text(

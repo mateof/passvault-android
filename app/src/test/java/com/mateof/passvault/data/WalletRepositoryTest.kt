@@ -3,6 +3,11 @@ package com.mateof.passvault.data
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import com.google.common.truth.Truth.assertThat
+import com.mateof.passvault.crypto.Base64Url
+import com.mateof.passvault.sync.Operations
+import kotlinx.serialization.json.JsonObjectBuilder
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import com.mateof.passvault.tkpak.Tkpak
 import com.mateof.passvault.tkpak.TkpakAssignment
 import com.mateof.passvault.tkpak.TkpakBarcode
@@ -33,6 +38,7 @@ import org.robolectric.RobolectricTestRunner
 class WalletRepositoryTest {
     private lateinit var database: PassVaultDatabase
     private lateinit var repository: WalletRepository
+    private lateinit var log: com.mateof.passvault.sync.OperationLog
 
     @Before
     fun setUp() {
@@ -40,7 +46,11 @@ class WalletRepositoryTest {
             ApplicationProvider.getApplicationContext(),
             PassVaultDatabase::class.java,
         ).allowMainThreadQueries().build()
-        repository = WalletRepository(database.walletDao(), InMemoryDeviceKeys())
+        // One key holder for both, because the log and the wallet encrypt with the same vault key
+        // and handing them different ones would make the test pass for the wrong reason.
+        val keys = InMemoryDeviceKeys()
+        log = com.mateof.passvault.sync.OperationLog(database.operationDao(), keys)
+        repository = WalletRepository(database.walletDao(), keys, log)
     }
 
     @After
@@ -249,5 +259,83 @@ class WalletRepositoryTest {
         }.exceptionOrNull()
 
         assertThat(thrown).isNotNull()
+    }
+
+    private fun proposed(label: String, barcode: String) =
+        com.mateof.passvault.ingest.ProposedTicket(
+            index = 0,
+            suggestedLabel = label,
+            barcode = com.mateof.passvault.ingest.DecodedBarcode("QR_CODE", barcode),
+            pageNumber = 1,
+            include = true,
+            warnings = emptyList(),
+        )
+
+    /** What another phone would send: its key, then an event, then a ticket. */
+    private suspend fun acceptFromPeer(eventName: String, ticketId: String, barcode: String) {
+        val peer = DeviceIdentity.generate()
+        fun body(build: JsonObjectBuilder.() -> Unit) = buildJsonObject(build)
+        log.accept(
+            listOf(
+                Operations.create(
+                    peer, EVENT_FROM_PEER, "device.register",
+                    body {
+                        put("deviceId", peer.deviceId)
+                        put("signingPublicKey", Base64Url.encode(peer.signingPublicKey))
+                    },
+                    1,
+                ),
+                Operations.create(peer, EVENT_FROM_PEER, "event.create", body { put("name", eventName) }, 2),
+                Operations.create(
+                    peer, EVENT_FROM_PEER, "ticket.add",
+                    body {
+                        put("ticketId", ticketId)
+                        put("barcodeValue", barcode)
+                    },
+                    3,
+                ),
+            ),
+        )
+    }
+
+    @Test
+    fun `saving a proposal writes it to the log, not only to the tables`() = runTest {
+        // Without this a ticket made on this phone can never leave it: a transfer carries the log,
+        // and a ticket that is not in the log is not in the transfer.
+        repository.saveProposed("Festival", listOf(proposed("Entrada 1", "8412-PROJ-0001")))
+
+        assertThat(log.allApplied().map { it.type }).containsAtLeast("event.create", "ticket.add")
+    }
+
+    @Test
+    fun `and the wallet shows what the log says`() = runTest {
+        repository.saveProposed("Festival", listOf(proposed("Entrada 1", "8412-PROJ-0001")))
+
+        assertThat(repository.wallet().first().single().eventName).isEqualTo("Festival")
+    }
+
+    @Test
+    fun `operations from another phone become tickets in the wallet`() = runTest {
+        // The whole point of projecting. The log accepting an operation and the user seeing a ticket
+        // are different things, and until they were connected a transfer could succeed while the
+        // wallet stayed empty.
+        acceptFromPeer("Concerto de proba", "ticket-from-peer", "8412-PEER-0001")
+
+        repository.projectAll()
+
+        assertThat(repository.wallet().first().single().eventName).isEqualTo("Concerto de proba")
+    }
+
+    @Test
+    fun `and the barcode a peer sent survives the trip into the wallet`() = runTest {
+        acceptFromPeer("Concerto", "ticket-from-peer", "8412-PEER-0001")
+
+        repository.projectAll()
+
+        assertThat(repository.detail("ticket-from-peer")?.barcodeValue).isEqualTo("8412-PEER-0001")
+    }
+
+    private companion object {
+        const val EVENT_FROM_PEER = "event-from-peer"
     }
 }

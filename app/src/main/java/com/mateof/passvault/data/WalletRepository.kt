@@ -1,6 +1,9 @@
 package com.mateof.passvault.data
 
 import com.mateof.passvault.crypto.Primitives
+import com.mateof.passvault.sync.OperationType
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import com.mateof.passvault.tkpak.OpenedTkpak
 import com.mateof.passvault.ui.wallet.TicketRow
 import com.mateof.passvault.ui.wallet.TicketState
@@ -23,6 +26,7 @@ import kotlinx.coroutines.flow.map
 class WalletRepository(
     private val dao: WalletDao,
     private val keys: DeviceKeys,
+    private val log: com.mateof.passvault.sync.OperationLog,
 ) {
     private fun aad(table: String, column: String, rowId: String) =
         "passvault/v1/field:$table.$column:$rowId"
@@ -129,52 +133,112 @@ class WalletRepository(
     /**
      * Saves the tickets a user confirmed from an ingestion proposal.
      *
-     * The event is created here because a document carries no event of its own — the file is a
-     * stack of tickets, and which event they belong to is something only the person importing them
-     * knows. Named after the document until they rename it.
+     * Written to the log first and projected from it, not written to the tables directly. This
+     * device made the event, so it is its creator, and the operations it signs here are what let the
+     * same tickets travel to another phone later. Doing it the other way round — tables now, log
+     * some day — is how a wallet ends up holding tickets it cannot explain the provenance of.
+     *
+     * The event is created here because a document carries no event of its own: the file is a stack
+     * of tickets, and which event they belong to is something only the person importing them knows.
      */
     suspend fun saveProposed(
         eventName: String,
         tickets: List<com.mateof.passvault.ingest.ProposedTicket>,
-        now: String = Instant.now().toString(),
+        now: String = Ids.toInstant(),
     ): Int {
         if (tickets.isEmpty()) return 0
-        val eventId = java.util.UUID.randomUUID().toString()
-        dao.upsertEvent(
-            EventEntity(
-                id = eventId,
-                nameCipher = encrypt(eventName, "events", "name_cipher", eventId),
-                venueCipher = null,
-                startsAt = null,
-                defaultAssignmentMode = "OPEN",
-                passwordProtected = 0,
-                createdAt = now,
-            ),
+        val eventId = Ids.newId()
+
+        log.registerSelf(eventId, null)
+        log.append(
+            eventId,
+            OperationType.EVENT_CREATE,
+            buildJsonObject { put("name", eventName) },
         )
+        for (proposed in tickets) {
+            log.append(
+                eventId,
+                OperationType.TICKET_ADD,
+                buildJsonObject {
+                    put("ticketId", Ids.newId())
+                    put("label", proposed.suggestedLabel)
+                    proposed.barcode?.let {
+                        put("barcodeFormat", it.format)
+                        put("barcodeValue", it.value)
+                    }
+                },
+            )
+        }
+
+        project(log.replay(eventId), now)
+        return tickets.size
+    }
+
+    /**
+     * Writes what the log says the wallet looks like.
+     *
+     * The projection is the only path from the log to the screen, and it upserts rather than
+     * replacing: replay recomputes an event from scratch, so what it produces is the whole truth
+     * about that event and can overwrite whatever was there.
+     *
+     * This is what makes a transfer visible. Operations arriving from another phone are verified and
+     * stored by the log, and until they are projected they are entirely invisible — the user sees an
+     * unchanged wallet and concludes the transfer failed.
+     */
+    suspend fun project(replayed: com.mateof.passvault.sync.ReplayResult, now: String = Ids.toInstant()) {
+        for (event in replayed.events) {
+            dao.upsertEvent(
+                EventEntity(
+                    id = event.eventId,
+                    nameCipher = encrypt(event.name, "events", "name_cipher", event.eventId),
+                    venueCipher = event.venue?.let {
+                        encrypt(it, "events", "venue_cipher", event.eventId)
+                    },
+                    startsAt = event.startsAt,
+                    defaultAssignmentMode = "OPEN",
+                    passwordProtected = 0,
+                    createdAt = now,
+                ),
+            )
+        }
         dao.upsertTickets(
-            tickets.map { proposed ->
-                val id = java.util.UUID.randomUUID().toString()
+            replayed.tickets.map { ticket ->
                 TicketEntity(
-                    id = id,
-                    eventId = eventId,
-                    labelCipher = encrypt(proposed.suggestedLabel, "tickets", "label_cipher", id),
-                    seatCipher = null,
-                    barcodeFormat = proposed.barcode?.format,
-                    barcodeCipher = proposed.barcode?.let {
-                        encrypt(it.value, "tickets", "barcode_cipher", id)
+                    id = ticket.ticketId,
+                    eventId = ticket.eventId,
+                    labelCipher = ticket.label?.let {
+                        encrypt(it, "tickets", "label_cipher", ticket.ticketId)
+                    },
+                    seatCipher = ticket.seat?.let {
+                        encrypt(it, "tickets", "seat_cipher", ticket.ticketId)
+                    },
+                    barcodeFormat = ticket.barcodeFormat,
+                    barcodeCipher = ticket.barcodeValue?.let {
+                        encrypt(it, "tickets", "barcode_cipher", ticket.ticketId)
                     },
                     assignmentMode = "OPEN",
-                    assignmentState = "FREE",
-                    holderLabelCipher = null,
-                    paymentState = null,
-                    amountCents = null,
-                    currency = null,
+                    assignmentState = ticket.state.name,
+                    holderLabelCipher = ticket.holder?.let {
+                        encrypt(it, "tickets", "holder_label_cipher", ticket.ticketId)
+                    },
+                    paymentState = ticket.paymentState,
+                    amountCents = ticket.amountCents,
+                    currency = ticket.currency,
                     exportedAt = null,
                     createdAt = now,
                 )
             },
         )
-        return tickets.size
+        for (ticketId in replayed.withdrawn) {
+            dao.deleteTicket(ticketId)
+        }
+    }
+
+    /** Projects every event the log knows about. What a device does after a transfer. */
+    suspend fun projectAll() {
+        for (eventId in log.eventIds()) {
+            project(log.replay(eventId))
+        }
     }
 
     /**

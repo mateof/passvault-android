@@ -57,4 +57,5 @@
         <item quantity="one">Received %1$d operation.</item>
         <item quantity="other">Received %1$d operations.</item>
     </plurals>
+    <string name="ticket_no_format">The type of this barcode is unknown, so it cannot be drawn. The number above is what counts.</string>
 </resources>

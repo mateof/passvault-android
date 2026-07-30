@@ -63,4 +63,5 @@
         <item quantity="one">Recibiuse %1$d operación.</item>
         <item quantity="other">Recibíronse %1$d operacións.</item>
     </plurals>
+    <string name="ticket_no_format">Non se sabe que tipo de código é este, así que non se pode debuxar. O número de arriba é o que vale.</string>
 </resources>

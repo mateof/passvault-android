@@ -44,6 +44,7 @@ class ShareViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     private val log: OperationLog,
     private val keys: DeviceKeys,
+    private val wallet: com.mateof.passvault.data.WalletRepository,
 ) : ViewModel() {
 
     private val discovery = PeerDiscovery(context)
@@ -163,6 +164,10 @@ class ShareViewModel @Inject constructor(
             received = log.accept(request.operations).count { it.state == AcceptState.APPLIED }
             Transfer.respond(peer, mine)
         }
+
+        // The log holding an operation is not the same as the user seeing a ticket. Projecting here
+        // is what turns a successful exchange into something visible in the wallet.
+        wallet.projectAll()
 
         _state.value = _state.value.copy(
             stage = ShareStage.Done,

@@ -57,4 +57,5 @@
         <item quantity="one">Se ha recibido %1$d operación.</item>
         <item quantity="other">Se han recibido %1$d operaciones.</item>
     </plurals>
+    <string name="ticket_no_format">No se sabe qué tipo de código es este, así que no se puede dibujar. El número de arriba es el que vale.</string>
 </resources>
