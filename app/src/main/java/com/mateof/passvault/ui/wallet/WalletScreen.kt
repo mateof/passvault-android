@@ -33,7 +33,10 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.mateof.passvault.R
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.border
 import com.mateof.passvault.ui.theme.LocalSpacing
+import com.mateof.passvault.ui.theme.LocalStatusColours
 import com.mateof.passvault.ui.theme.Motion
 
 /**
@@ -178,24 +181,35 @@ private fun TicketCard(
 /**
  * The state indicator.
  *
- * A colour and nothing else would fail for a colour-blind user and in sunlight, so the shape
- * changes too: a provisional ticket is an outline, a held one is solid. The written label carries
- * the meaning; this only makes it scannable down a list.
+ * Two things this got wrong until the app was run on a device, neither of which compiling would
+ * have shown:
+ *
+ *   * the colours came from the scheme, so dynamic colour flattened all four into the same grey;
+ *   * `Free` used `surfaceVariant`, which under that scheme was the card background — an indicator
+ *     that was simply invisible.
+ *
+ * Now the colours are fixed (see StatusColours) and `Free` is an outline rather than a fill, so it
+ * reads against any surface. Shape carries the meaning alongside colour, for a colour-blind user
+ * and for sunlight; the written label is what actually states it.
  */
 @Composable
 private fun StateDot(state: TicketState) {
+    val status = LocalStatusColours.current
     val target = when (state) {
-        TicketState.Held -> MaterialTheme.colorScheme.primary
-        TicketState.Provisional -> MaterialTheme.colorScheme.secondary
-        TicketState.Free -> MaterialTheme.colorScheme.surfaceVariant
-        TicketState.Transferred -> MaterialTheme.colorScheme.onSurfaceVariant
+        TicketState.Held -> status.held
+        TicketState.Provisional -> status.provisional
+        TicketState.Free -> status.free
+        TicketState.Transferred -> status.transferred
     }
     val colour by animateColorAsState(target, Motion.quick(), label = "state")
 
+    val base = Modifier.size(12.dp)
     Box(
-        modifier = Modifier
-            .size(if (state == TicketState.Provisional) 10.dp else 12.dp)
-            .background(colour, CircleShape),
+        modifier = when (state) {
+            // An outline, so it is visible on any surface rather than only on a darker one.
+            TicketState.Free -> base.border(BorderStroke(2.dp, colour), CircleShape)
+            else -> base.background(colour, CircleShape)
+        },
     )
 }
 

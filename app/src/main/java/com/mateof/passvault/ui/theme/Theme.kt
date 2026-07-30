@@ -81,6 +81,29 @@ data class Spacing(
 
 val LocalSpacing = androidx.compose.runtime.staticCompositionLocalOf { Spacing() }
 
+/**
+ * Status colours, deliberately outside the colour scheme.
+ *
+ * Running the app on a device with dynamic colour showed why. The wallpaper palette replaced the
+ * whole scheme, so the amber that marks a provisional claim came out the same grey as everything
+ * else and the distinction the user needs most simply vanished.
+ *
+ * Dynamic colour is right for surfaces and chrome — it makes the app feel part of the phone. It is
+ * wrong for anything that carries meaning, for the same reason an error is always red: the user has
+ * to be able to learn what a colour means, and a colour that changes with the wallpaper cannot be
+ * learned. These four are fixed, and each is paired with a shape difference so the meaning survives
+ * for a colour-blind user and in sunlight.
+ */
+@Immutable
+data class StatusColours(
+    val held: Color = Color(0xFF0F7B6C),
+    val provisional: Color = Color(0xFFD9A404),
+    val free: Color = Color(0xFF8A948F),
+    val transferred: Color = Color(0xFF6B7A73),
+)
+
+val LocalStatusColours = androidx.compose.runtime.staticCompositionLocalOf { StatusColours() }
+
 private val PassVaultTypography = Typography().run {
     copy(
         headlineMedium = headlineMedium.copy(fontWeight = FontWeight.SemiBold),

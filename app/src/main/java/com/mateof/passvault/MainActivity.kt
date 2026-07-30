@@ -17,7 +17,7 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.res.stringResource
 import com.mateof.passvault.ui.theme.PassVaultTheme
 import com.mateof.passvault.ui.wallet.WalletScreen
-import com.mateof.passvault.ui.wallet.WalletUiState
+import com.mateof.passvault.ui.wallet.initialWalletState
 import dagger.hilt.android.AndroidEntryPoint
 
 @AndroidEntryPoint
@@ -43,7 +43,9 @@ private fun Wallet() {
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior(
         rememberTopAppBarState(),
     )
-    val state = remember { WalletUiState() }
+    // Empty until persistence lands. Debug builds seed a sample so the screen can actually be
+    // looked at; see src/debug/SampleWallet.
+    val state = remember { initialWalletState() }
 
     Scaffold(
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
