@@ -80,6 +80,10 @@ android {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
             excludes += "/META-INF/INDEX.LIST"
+            // Bouncy Castle and jspecify both ship an OSGi manifest under the same
+            // multi-release path. Neither is used at runtime on Android, so the
+            // duplicate is dropped rather than resolved.
+            excludes += "/META-INF/versions/9/OSGI-INF/MANIFEST.MF"
         }
     }
 }
@@ -123,7 +127,14 @@ dependencies {
     implementation(libs.retrofit.kotlinx.serialization)
 
     implementation(libs.zxing.core)
-    implementation(libs.pdfbox.android)
+    // PdfBox-Android carries its own Bouncy Castle under the older artefact name
+    // (bcprov-jdk15to18). Two copies of the same library collide at dex time, so the
+    // transitive one is dropped and the newer artefact below is the only one. They are
+    // build variants of the same source, and the classes PdfBox uses — ASN.1 and PKCS —
+    // are stable across both.
+    implementation(libs.pdfbox.android) {
+        exclude(group = "org.bouncycastle")
+    }
     implementation(libs.bouncycastle)
 
     coreLibraryDesugaring(libs.desugar.jdk.libs)
