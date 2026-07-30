@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <!-- The outbox lives on external storage rather than in internal files, because adb can
+         write here and cannot write there. That is what lets a fixture be swapped with a push
+         instead of a rebuild. -->
+    <external-files-path name="outbox" path="outbox/" />
+</paths>

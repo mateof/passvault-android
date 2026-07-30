@@ -109,10 +109,71 @@ private val ZXING_TO_FORMAT = mapOf(
  * A page with two barcodes is a real case — two passes printed on one sheet — and the caller has to
  * decide how they split into tickets rather than being handed a guess.
  */
-fun decodeBarcodes(page: RasterPage): List<DecodedBarcode> = runCatching {
-    val bitmap = BinaryBitmap(
-        HybridBinarizer(RGBLuminanceSource(page.width, page.height, page.pixels)),
-    )
+fun decodeBarcodes(page: RasterPage): List<DecodedBarcode> {
+    val source = RGBLuminanceSource(page.width, page.height, page.pixels)
+
+    val wholePage = decodeRegion(source)
+    if (wholePage.isNotEmpty()) return wholePage
+
+    // Nothing on the whole page. That is usually an instructions sheet, but it is also what a
+    // centre-seeking detector reports for a symbol sitting off to one side, so it is worth a
+    // second look before the page is written off. See [decodeByTiles].
+    return decodeByTiles(source)
+}
+
+/**
+ * A second pass over overlapping windows of the page.
+ *
+ * ZXing's Aztec and Data Matrix detectors look for the symbol by growing a white rectangle
+ * outward from the centre of the image. On a ticket sheet — one modest barcode high on an
+ * otherwise blank A4 page — that rectangle swallows the whole page and its centre lands on empty
+ * paper, so the symbol is never found. QR and PDF417 are unaffected: their detectors scan rows
+ * for a pattern and do not care where on the page it sits.
+ *
+ * This is why the app read a real vendor PDF's QR and PDF417 and silently dropped its Aztec while
+ * the server read all three: the server's ZXing is the C++ implementation through WebAssembly,
+ * whose detector does not have this bias. The unit tests missed it because their fixture pages
+ * were barely larger than the barcode, which is the one geometry where the bias does not bite.
+ *
+ * Cropping each window so the symbol falls near its centre gives those detectors the frame they
+ * need. It runs only when the whole-page pass found nothing, so an ordinary page costs nothing
+ * extra; the price is paid on pages that would otherwise have been lost, and on genuinely blank
+ * ones. A page holding both a QR and an Aztec still yields only the QR, because a hit on the
+ * whole page skips this pass — accepted rather than paying for the tiles on every page.
+ */
+private fun decodeByTiles(source: RGBLuminanceSource): List<DecodedBarcode> {
+    val window = minOf(source.width, source.height) / 2
+    if (window < MIN_TILE) return emptyList()
+    // Two thirds of overlap. Half was the first guess and was not enough: windows have to overlap
+    // by more than the symbol is wide for one of them to contain it whole, and a symbol that lands
+    // across a seam is invisible to every window that sees only part of it.
+    val step = window / 3
+
+    val found = LinkedHashMap<String, DecodedBarcode>()
+    var top = 0
+    while (top < source.height && found.size < IngestLimits.BARCODES_PER_PAGE) {
+        var left = 0
+        val height = minOf(window, source.height - top)
+        while (left < source.width && found.size < IngestLimits.BARCODES_PER_PAGE) {
+            val width = minOf(window, source.width - left)
+            if (width >= MIN_TILE && height >= MIN_TILE) {
+                for (decoded in decodeRegion(source.crop(left, top, width, height))) {
+                    // Keyed by value: overlapping windows see the same symbol more than once, and
+                    // one barcode read twice is one barcode.
+                    found.putIfAbsent(decoded.value, decoded)
+                }
+            }
+            if (left + window >= source.width) break
+            left += step
+        }
+        if (top + window >= source.height) break
+        top += step
+    }
+    return found.values.toList()
+}
+
+private fun decodeRegion(source: com.google.zxing.LuminanceSource): List<DecodedBarcode> = runCatching {
+    val bitmap = BinaryBitmap(HybridBinarizer(source))
     val hints = mapOf(
         DecodeHintType.TRY_HARDER to true,
         DecodeHintType.POSSIBLE_FORMATS to ZXING_TO_FORMAT.keys.toList(),
@@ -124,6 +185,9 @@ fun decodeBarcodes(page: RasterPage): List<DecodedBarcode> = runCatching {
             ZXING_TO_FORMAT[result.barcodeFormat]?.let { DecodedBarcode(it, result.text) }
         }
 }.getOrDefault(emptyList())
+
+/** Below this a window is too small to hold a readable symbol, and only costs time. */
+private const val MIN_TILE = 64
 
 enum class ProposalWarning {
     NO_BARCODE,

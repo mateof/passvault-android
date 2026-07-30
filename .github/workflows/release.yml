@@ -43,7 +43,9 @@ jobs:
         run: echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > $RUNNER_TEMP/keystore.jks
 
       - name: Build Release APK
-        run: ./gradlew assembleRelease
+        # Scoped to :app. The repository also holds tools/sender, a test harness that has
+        # no business being built as part of a release.
+        run: ./gradlew :app:assembleRelease
         env:
           KEYSTORE_PATH: ${{ runner.temp }}/keystore.jks
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}

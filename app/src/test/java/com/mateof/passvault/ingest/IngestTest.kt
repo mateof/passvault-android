@@ -33,6 +33,27 @@ class IngestTest {
         return RasterPage(pageNumber, width, height, pixels)
     }
 
+    /**
+     * A page laid out the way a ticket vendor lays one out.
+     *
+     * The difference from [page] is the whole point of these three tests. A symbol that fills the
+     * frame is the easy case, and the one a synthetic fixture falls into without meaning to; what
+     * arrives from a vendor is a modest barcode high on an otherwise empty A4 sheet, rendered at
+     * the width ingestion actually uses. That is a different problem for a detector, and the
+     * emulator found it: a real four-page PDF lost its Aztec while the tight fixture above passed.
+     */
+    private fun sheet(pageNumber: Int, payload: String, format: BarcodeFormat): RasterPage {
+        val width = IngestLimits.RENDER_WIDTH
+        // A4 at the proportions and placement the fixtures in the server repository use: 180pt
+        // wide, 60pt from the left edge, 520pt up from the bottom of a 595x842pt page.
+        val height = width * 842 / 595
+        val symbol = width * 180 / 595
+        val matrix = MultiFormatWriter().encode(payload, format, symbol, symbol)
+        val pixels = IntArray(width * height) { 0xFFFFFFFF.toInt() }
+        matrix.blitInto(pixels, width, width * 60 / 595, height - width * 700 / 595)
+        return RasterPage(pageNumber, width, height, pixels)
+    }
+
     private fun BitMatrix.blitInto(pixels: IntArray, stride: Int, offsetX: Int, offsetY: Int) {
         for (y in 0 until height) {
             for (x in 0 until width) {
@@ -111,6 +132,27 @@ class IngestTest {
         val decoded = decodeBarcodes(page(1, "8412-AZTEC-0001" to BarcodeFormat.AZTEC))
 
         assertThat(decoded.single().format).isEqualTo("AZTEC")
+    }
+
+    @Test
+    fun `a QR on a whole sheet is read, not just one that fills the frame`() {
+        val decoded = decodeBarcodes(sheet(1, "8412-SHEET-0001", BarcodeFormat.QR_CODE))
+
+        assertThat(decoded.single().value).isEqualTo("8412-SHEET-0001")
+    }
+
+    @Test
+    fun `an Aztec on a whole sheet is read, not just one that fills the frame`() {
+        val decoded = decodeBarcodes(sheet(1, "8412-SHEET-0002", BarcodeFormat.AZTEC))
+
+        assertThat(decoded.single().value).isEqualTo("8412-SHEET-0002")
+    }
+
+    @Test
+    fun `a Data Matrix on a whole sheet is read, not just one that fills the frame`() {
+        val decoded = decodeBarcodes(sheet(1, "8412-SHEET-0003", BarcodeFormat.DATA_MATRIX))
+
+        assertThat(decoded.single().value).isEqualTo("8412-SHEET-0003")
     }
 
     @Test

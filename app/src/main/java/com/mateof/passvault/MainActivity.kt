@@ -120,7 +120,14 @@ private fun PassVaultApp(
         val result = outcome ?: return@LaunchedEffect
         val message = when (result) {
             is ImportOutcome.Imported -> buildString {
-                append(context.getString(R.string.import_done, result.ticketCount, result.eventName))
+                append(
+                    context.resources.getQuantityString(
+                        R.plurals.import_done,
+                        result.ticketCount,
+                        result.ticketCount,
+                        result.eventName,
+                    ),
+                )
                 if (!result.senderVerified) {
                     // Said, not hidden. An unverified sender is the ordinary case for a file from
                     // somebody never paired with, and the user is who can judge it.
@@ -128,7 +135,11 @@ private fun PassVaultApp(
                     append(context.getString(R.string.import_unverified_sender))
                 }
             }
-            is ImportOutcome.Saved -> context.getString(R.string.ingest_saved, result.ticketCount)
+            is ImportOutcome.Saved -> context.resources.getQuantityString(
+                R.plurals.ingest_saved,
+                result.ticketCount,
+                result.ticketCount,
+            )
             is ImportOutcome.Failed -> result.code.name
             ImportOutcome.Unreadable -> context.getString(R.string.import_unreadable)
         }
@@ -167,7 +178,10 @@ private fun PassVaultApp(
                                 .filter { it.include != excluded.contains(it.index) }
                                 .map { it.index }
                             excluded = emptySet()
-                            viewModel.saveProposal("Importado", chosen)
+                            // A placeholder name until the review screen asks for one. It was a
+                            // bare Kotlin literal, which put an untranslated word on screen in
+                            // every language.
+                            viewModel.saveProposal(context.getString(R.string.ingest_event_default), chosen)
                         },
                     )
                 } ?: WalletPane(

@@ -67,6 +67,20 @@ export JAVA_HOME="/path/to/jdk-21"
 `local.properties` with `sdk.dir` is gitignored; without it the build stops with
 `SDK location not found`.
 
+## Verifying the import routes
+
+Both ways of importing — a `.tkpak` somebody sent and a PDF from a ticket vendor — begin with
+another application handing over a `content://` URI. `adb` cannot produce one: scoped storage
+refuses `file://`, and a `content://` typed at the shell arrives without the read grant that
+makes it openable. So the tests need an application to do the sending, and
+[`tools/sender`](tools/sender/README.md) is it — a separate APK, never shipped, driven entirely
+from `adb`.
+
+It is worth the trouble. Running the real thing through it is what showed that the app read a
+vendor PDF's QR and PDF417 and silently dropped its Aztec, and that sharing a document opened
+the app on a blank screen for ten seconds with nothing to say it was working. Neither is
+visible from a compiler or a unit test.
+
 A release build is unsigned unless `KEYSTORE_PATH` is set, so working on the app
 never requires the production key.
 

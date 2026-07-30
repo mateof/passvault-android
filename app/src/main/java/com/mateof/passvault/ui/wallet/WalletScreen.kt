@@ -20,6 +20,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -85,26 +86,62 @@ fun WalletScreen(
 ) {
     val spacing = LocalSpacing.current
 
-    when {
-        state.isLocked -> Message(stringResource(R.string.vault_locked), modifier)
-        state.tickets.isEmpty() && !state.isLoading ->
-            Message(stringResource(R.string.wallet_empty), modifier)
-        else -> LazyColumn(
-            modifier = modifier.fillMaxSize(),
-            contentPadding = PaddingValues(spacing.medium),
-            verticalArrangement = Arrangement.spacedBy(spacing.small),
-        ) {
-            items(
-                items = state.tickets,
-                // A stable key is what lets a single row animate when its state changes, instead of
-                // the list being rebuilt and the scroll position lost.
-                key = { ticket -> ticket.id },
-                // One content type, so the item pool is reused rather than reallocated per row.
-                contentType = { "ticket" },
-            ) { ticket ->
-                TicketCard(ticket = ticket, onClick = onTicketClick)
+    Column(modifier = modifier.fillMaxSize()) {
+        // Reading a shared PDF takes several seconds: it is rasterised a page at a time and every
+        // page is searched for a barcode. Until this was watched on a device the state was tracked
+        // and never drawn, so sharing a document opened the app on a blank wallet that sat there
+        // doing nothing visible — indistinguishable from the share having failed.
+        if (state.isLoading) {
+            Working()
+        }
+
+        when {
+            state.isLocked -> Message(stringResource(R.string.vault_locked))
+            state.tickets.isEmpty() && !state.isLoading ->
+                Message(stringResource(R.string.wallet_empty))
+            else -> LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(spacing.medium),
+                verticalArrangement = Arrangement.spacedBy(spacing.small),
+            ) {
+                items(
+                    items = state.tickets,
+                    // A stable key is what lets a single row animate when its state changes, instead
+                    // of the list being rebuilt and the scroll position lost.
+                    key = { ticket -> ticket.id },
+                    // One content type, so the item pool is reused rather than reallocated per row.
+                    contentType = { "ticket" },
+                ) { ticket ->
+                    TicketCard(ticket = ticket, onClick = onTicketClick)
+                }
             }
         }
+    }
+}
+
+/**
+ * What the app is busy doing, said in words as well as by a spinner.
+ *
+ * A bare indicator says something is happening; naming the work is what tells the user the file
+ * they shared did arrive, which is the question they actually have.
+ */
+@Composable
+private fun Working() {
+    val spacing = LocalSpacing.current
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = spacing.medium, vertical = spacing.small),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(spacing.medium),
+    ) {
+        CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+        Text(
+            text = stringResource(R.string.ingest_working),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 

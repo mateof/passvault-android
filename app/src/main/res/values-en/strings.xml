@@ -11,15 +11,27 @@
     <string name="claim_provisional_explain">You claimed this ticket while offline. It is not final yet: it is confirmed once the device can synchronise.</string>
     <string name="import_password_label">Event password</string>
     <string name="import_title">Import tickets</string>
-    <string name="import_done">Imported %1$d tickets from “%2$s”.</string>
     <string name="import_unverified_sender">The sender of this file could not be verified.</string>
     <string name="action_cancel">Cancel</string>
     <string name="action_confirm_import">Import</string>
     <string name="import_unreadable">The file could not be read. The sender may no longer be allowing access to it.</string>
     <string name="ingest_review_explain">Tickets do not always come one per page: some PDFs put two on a sheet and others lead with instructions. Check this before saving it.</string>
-    <string name="ingest_confirm">Save %1$d tickets</string>
     <string name="ingest_warning_no_barcode">No barcode was found on this page.</string>
     <string name="ingest_warning_multiple">This page holds more than one barcode; the split is a guess.</string>
     <string name="ingest_warning_duplicate">This barcode already appears on another page. Saving both would create the same seat twice.</string>
-    <string name="ingest_saved">Saved %1$d tickets.</string>
+    <string name="ingest_working">Reading the document…</string>
+    <string name="ingest_event_default">Imported tickets</string>
+
+    <plurals name="import_done">
+        <item quantity="one">Imported %1$d ticket from “%2$s”.</item>
+        <item quantity="other">Imported %1$d tickets from “%2$s”.</item>
+    </plurals>
+    <plurals name="ingest_confirm">
+        <item quantity="one">Save %1$d ticket</item>
+        <item quantity="other">Save %1$d tickets</item>
+    </plurals>
+    <plurals name="ingest_saved">
+        <item quantity="one">Saved %1$d ticket.</item>
+        <item quantity="other">Saved %1$d tickets.</item>
+    </plurals>
 </resources>

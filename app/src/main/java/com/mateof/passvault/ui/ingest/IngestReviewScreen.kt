@@ -20,6 +20,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -92,7 +93,7 @@ fun IngestReviewScreen(
                 .fillMaxWidth()
                 .padding(spacing.medium),
         ) {
-            Text(stringResource(R.string.ingest_confirm, chosen))
+            Text(pluralStringResource(R.plurals.ingest_confirm, chosen, chosen))
         }
     }
 }

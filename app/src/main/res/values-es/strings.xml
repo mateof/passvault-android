@@ -11,15 +11,27 @@
     <string name="claim_provisional_explain">Has reclamado esta entrada sin conexión. Todavía no es definitiva: se confirma cuando el dispositivo pueda sincronizar.</string>
     <string name="import_password_label">Contraseña del evento</string>
     <string name="import_title">Importar entradas</string>
-    <string name="import_done">Se han importado %1$d entradas de «%2$s».</string>
     <string name="import_unverified_sender">No se ha podido verificar quién envió este archivo.</string>
     <string name="action_cancel">Cancelar</string>
     <string name="action_confirm_import">Importar</string>
     <string name="import_unreadable">No se ha podido leer el archivo. Puede que quien lo envió ya no permita acceder a él.</string>
     <string name="ingest_review_explain">No todas las entradas vienen una por página: hay PDF con dos por hoja y otros con una portada de instrucciones. Revisa esto antes de guardarlo.</string>
-    <string name="ingest_confirm">Guardar %1$d entradas</string>
     <string name="ingest_warning_no_barcode">No se ha encontrado ningún código en esta página.</string>
     <string name="ingest_warning_multiple">Esta página tiene más de un código; el reparto es una suposición.</string>
     <string name="ingest_warning_duplicate">Este código ya aparece en otra página. Guardarlo dos veces crearía el mismo asiento dos veces.</string>
-    <string name="ingest_saved">Se han guardado %1$d entradas.</string>
+    <string name="ingest_working">Leyendo el documento…</string>
+    <string name="ingest_event_default">Entradas importadas</string>
+
+    <plurals name="import_done">
+        <item quantity="one">Se ha importado %1$d entrada de «%2$s».</item>
+        <item quantity="other">Se han importado %1$d entradas de «%2$s».</item>
+    </plurals>
+    <plurals name="ingest_confirm">
+        <item quantity="one">Guardar %1$d entrada</item>
+        <item quantity="other">Guardar %1$d entradas</item>
+    </plurals>
+    <plurals name="ingest_saved">
+        <item quantity="one">Se ha guardado %1$d entrada.</item>
+        <item quantity="other">Se han guardado %1$d entradas.</item>
+    </plurals>
 </resources>
