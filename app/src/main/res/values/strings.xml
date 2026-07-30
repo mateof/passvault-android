@@ -71,4 +71,31 @@
     <string name="document_unreadable">Non se puido abrir o documento gardado.</string>
     <string name="document_page">Páxina %1$d</string>
     <string name="action_open_document">Ver o documento orixinal</string>
+    <string name="server_title">Conectar cun servidor</string>
+    <string name="server_optional">Non fai falta ningún. A carteira, a ingesta, os ficheiros .tkpak e pasar entradas a outro móbil na mesma wifi funcionan sen servidor. Un servidor engade un sitio onde o rexistro se atopa con dispositivos que non están na sala, e unha autoridade que pode resolver un reclamo disputado.</string>
+    <string name="server_address">Enderezo do servidor</string>
+    <string name="server_address_help">Se non pos http:// nin https://, úsase https.</string>
+    <string name="server_connect">Conectar</string>
+    <string name="server_email">Correo electrónico</string>
+    <string name="server_password">Contrasinal de acceso</string>
+    <string name="server_sign_in">Entrar</string>
+    <string name="server_forget">Esquecer este servidor</string>
+    <string name="server_second_factor">Verificación en dous pasos</string>
+    <string name="server_second_factor_email">Introduce o código que se enviou ao teu correo.</string>
+    <string name="server_second_factor_totp">Introduce o código da túa aplicación de autenticación.</string>
+    <string name="server_code">Código</string>
+    <string name="vault_open_title">Abrir o baúl</string>
+    <string name="vault_two_secrets">A frase do baúl non é o teu contrasinal de acceso. O contrasinal proba quen es; a frase descifra as túas entradas, e o servidor non a garda en ningures. Por iso pídese cada vez que te conectas.</string>
+    <string name="vault_passphrase_label">Frase do baúl</string>
+    <string name="vault_open">Abrir</string>
+    <string name="server_ready">Conectado. Sincronizar intercambia o rexistro de operacións nas dúas direccións.</string>
+    <string name="server_sync">Sincronizar agora</string>
+    <plurals name="server_sync_done">
+        <item quantity="one">Recibiuse %1$d operación do servidor.</item>
+        <item quantity="other">Recibíronse %1$d operacións do servidor.</item>
+    </plurals>
+    <plurals name="server_sync_local_only">
+        <item quantity="one">%1$d evento é só deste móbil e non se sincronizou.</item>
+        <item quantity="other">%1$d eventos son só deste móbil e non se sincronizaron.</item>
+    </plurals>
 </resources>

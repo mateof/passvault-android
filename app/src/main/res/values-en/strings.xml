@@ -65,4 +65,31 @@
     <string name="document_unreadable">The stored document could not be opened.</string>
     <string name="document_page">Page %1$d</string>
     <string name="action_open_document">View the original document</string>
+    <string name="server_title">Connect to a server</string>
+    <string name="server_optional">You do not need one. The wallet, ingestion, .tkpak files and passing tickets to another phone on the same Wi-Fi all work with no server. A server adds a place for the log to meet devices that are not in the room, and an authority that can settle a contested claim.</string>
+    <string name="server_address">Server address</string>
+    <string name="server_address_help">Without http:// or https://, https is used.</string>
+    <string name="server_connect">Connect</string>
+    <string name="server_email">Email address</string>
+    <string name="server_password">Sign-in password</string>
+    <string name="server_sign_in">Sign in</string>
+    <string name="server_forget">Forget this server</string>
+    <string name="server_second_factor">Two-step verification</string>
+    <string name="server_second_factor_email">Enter the code that was emailed to you.</string>
+    <string name="server_second_factor_totp">Enter the code from your authenticator app.</string>
+    <string name="server_code">Code</string>
+    <string name="vault_open_title">Open the vault</string>
+    <string name="vault_two_secrets">The vault passphrase is not your sign-in password. The password proves who you are; the passphrase decrypts your tickets, and the server keeps it nowhere. That is why it is asked for on every connection.</string>
+    <string name="vault_passphrase_label">Vault passphrase</string>
+    <string name="vault_open">Open</string>
+    <string name="server_ready">Connected. Syncing exchanges the operation log in both directions.</string>
+    <string name="server_sync">Sync now</string>
+    <plurals name="server_sync_done">
+        <item quantity="one">Received %1$d operation from the server.</item>
+        <item quantity="other">Received %1$d operations from the server.</item>
+    </plurals>
+    <plurals name="server_sync_local_only">
+        <item quantity="one">%1$d event is only on this phone and was not synced.</item>
+        <item quantity="other">%1$d events are only on this phone and were not synced.</item>
+    </plurals>
 </resources>

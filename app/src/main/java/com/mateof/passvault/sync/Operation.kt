@@ -10,6 +10,8 @@ import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 
 /**
@@ -141,6 +143,30 @@ object Operations {
     val LOGICAL_ORDER: Comparator<Operation> = compareBy<Operation> { it.lamport }
         .thenBy { deviceHash(it.deviceId) }
         .thenBy { it.operationId }
+
+    /**
+     * Rebuilds an operation from the JSON a peer or the server sent.
+     *
+     * The signature travels with it and is checked later, on acceptance — parsing is not the place
+     * to decide whether something is genuine.
+     */
+    fun fromSignedJson(source: JsonObject): Operation {
+        val actor = source["actorUserId"]?.jsonPrimitive
+        return Operation(
+            operationId = source.text("operationId").orEmpty(),
+            deviceId = source.text("deviceId").orEmpty(),
+            actorUserId = actor?.let { if (it.isString) it.content else null },
+            lamport = source["lamport"]?.jsonPrimitive?.content?.toLongOrNull() ?: 0L,
+            wallClock = source.text("wallClock").orEmpty(),
+            eventId = source["scope"]?.jsonObject?.text("id").orEmpty(),
+            type = source.text("type").orEmpty(),
+            body = source["body"]?.jsonObject ?: JsonObject(emptyMap()),
+            signature = source.text("signature"),
+        )
+    }
+
+    private fun JsonObject.text(key: String): String? =
+        this[key]?.jsonPrimitive?.let { if (it.isString) it.content else null }
 
     fun deviceHash(deviceId: String): String =
         Base64Url.encode(Primitives.sha256(deviceId.toByteArray(Charsets.UTF_8)))

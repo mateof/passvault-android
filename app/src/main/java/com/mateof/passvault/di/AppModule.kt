@@ -70,6 +70,17 @@ object AppModule {
 
     @Provides
     @Singleton
+    fun serverSettings(@ApplicationContext context: Context): com.mateof.passvault.server.ServerSettings =
+        com.mateof.passvault.server.ServerSettings(context)
+
+    @Provides
+    @Singleton
+    fun serverApi(
+        settings: com.mateof.passvault.server.ServerSettings,
+    ): com.mateof.passvault.server.ServerApi = com.mateof.passvault.server.ServerApi(settings)
+
+    @Provides
+    @Singleton
     fun operationLog(
         dao: com.mateof.passvault.data.OperationDao,
         keys: DeviceKeys,

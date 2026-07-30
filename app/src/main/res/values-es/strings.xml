@@ -65,4 +65,31 @@
     <string name="document_unreadable">No se ha podido abrir el documento guardado.</string>
     <string name="document_page">Página %1$d</string>
     <string name="action_open_document">Ver el documento original</string>
+    <string name="server_title">Conectar con un servidor</string>
+    <string name="server_optional">No hace falta ninguno. La cartera, la ingesta, los archivos .tkpak y pasar entradas a otro móvil en la misma wifi funcionan sin servidor. Un servidor añade un sitio donde el registro se encuentra con dispositivos que no están en la sala, y una autoridad que puede resolver una reclamación disputada.</string>
+    <string name="server_address">Dirección del servidor</string>
+    <string name="server_address_help">Si no pones http:// ni https://, se usa https.</string>
+    <string name="server_connect">Conectar</string>
+    <string name="server_email">Correo electrónico</string>
+    <string name="server_password">Contraseña de acceso</string>
+    <string name="server_sign_in">Entrar</string>
+    <string name="server_forget">Olvidar este servidor</string>
+    <string name="server_second_factor">Verificación en dos pasos</string>
+    <string name="server_second_factor_email">Introduce el código que se ha enviado a tu correo.</string>
+    <string name="server_second_factor_totp">Introduce el código de tu aplicación de autenticación.</string>
+    <string name="server_code">Código</string>
+    <string name="vault_open_title">Abrir el baúl</string>
+    <string name="vault_two_secrets">La frase del baúl no es tu contraseña de acceso. La contraseña prueba quién eres; la frase descifra tus entradas, y el servidor no la guarda en ningún sitio. Por eso se pide cada vez que te conectas.</string>
+    <string name="vault_passphrase_label">Frase del baúl</string>
+    <string name="vault_open">Abrir</string>
+    <string name="server_ready">Conectado. Sincronizar intercambia el registro de operaciones en las dos direcciones.</string>
+    <string name="server_sync">Sincronizar ahora</string>
+    <plurals name="server_sync_done">
+        <item quantity="one">Se ha recibido %1$d operación del servidor.</item>
+        <item quantity="other">Se han recibido %1$d operaciones del servidor.</item>
+    </plurals>
+    <plurals name="server_sync_local_only">
+        <item quantity="one">%1$d evento es solo de este móvil y no se ha sincronizado.</item>
+        <item quantity="other">%1$d eventos son solo de este móvil y no se han sincronizado.</item>
+    </plurals>
 </resources>

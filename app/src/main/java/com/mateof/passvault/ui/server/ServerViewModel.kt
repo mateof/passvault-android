@@ -1,0 +1,227 @@
+package com.mateof.passvault.ui.server
+
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import com.mateof.passvault.data.WalletRepository
+import com.mateof.passvault.server.ServerApi
+import com.mateof.passvault.server.ServerException
+import com.mateof.passvault.server.ServerSettings
+import com.mateof.passvault.server.SignInOutcome
+import com.mateof.passvault.sync.AcceptState
+import com.mateof.passvault.sync.OperationLog
+import dagger.hilt.android.lifecycle.HiltViewModel
+import javax.inject.Inject
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+
+/**
+ * Joining a server, which the app never requires.
+ *
+ * Everything works with no server: the wallet, ingestion, `.tkpak` files and the transfer between
+ * two phones on the same Wi-Fi. A server adds a place for the log to meet other devices that are
+ * not in the room, and an authority that can settle a contested claim. Nothing about how the app
+ * behaves offline changes when one is configured — which is why this is a screen you can leave
+ * without touching.
+ *
+ * Three gates, in order and for different reasons: an address, because there is no default; a
+ * session, which proves who you are; and the vault passphrase, which decrypts. The third is not a
+ * repeat of the second — the server holds no copy of it, and every reconnection asks again because
+ * the key lives only in that process's memory.
+ */
+@HiltViewModel
+class ServerViewModel @Inject constructor(
+    private val settings: ServerSettings,
+    private val api: ServerApi,
+    private val log: OperationLog,
+    private val wallet: WalletRepository,
+) : ViewModel() {
+
+    private val _state = MutableStateFlow(
+        ServerUiState(address = settings.baseUrl(), stage = stageFor(settings)),
+    )
+    val state: StateFlow<ServerUiState> = _state.asStateFlow()
+
+    private var challenge: String? = null
+
+    fun setAddress(value: String) {
+        _state.value = _state.value.copy(address = value)
+    }
+
+    /** Saves the address and asks the server whether it is one. */
+    fun connect() {
+        val typed = _state.value.address
+        viewModelScope.launch {
+            _state.value = _state.value.copy(busy = true, failure = null)
+            settings.setBaseUrl(typed)
+            val reached = withContext(Dispatchers.IO) { runCatching { api.probe() } }
+            _state.value = reached.fold(
+                onSuccess = {
+                    _state.value.copy(
+                        busy = false,
+                        address = settings.baseUrl(),
+                        stage = ServerStage.SignIn,
+                    )
+                },
+                onFailure = { cause ->
+                    // The address is kept rather than discarded: a typo is easier to fix than to
+                    // retype, and a server that is merely asleep is not a wrong address.
+                    _state.value.copy(busy = false, failure = describe(cause))
+                },
+            )
+        }
+    }
+
+    fun signIn(email: String, password: String) {
+        viewModelScope.launch {
+            _state.value = _state.value.copy(busy = true, failure = null)
+            val outcome = withContext(Dispatchers.IO) { runCatching { api.signIn(email, password) } }
+            _state.value = outcome.fold(
+                onSuccess = { result ->
+                    when (result) {
+                        is SignInOutcome.SignedIn -> _state.value.copy(
+                            busy = false,
+                            stage = ServerStage.Vault,
+                        )
+                        is SignInOutcome.SecondFactorNeeded -> {
+                            challenge = result.challenge
+                            _state.value.copy(
+                                busy = false,
+                                stage = ServerStage.SecondFactor,
+                                secondFactorMethods = result.methods,
+                            )
+                        }
+                    }
+                },
+                onFailure = { _state.value.copy(busy = false, failure = describe(it)) },
+            )
+        }
+    }
+
+    fun submitSecondFactor(code: String, method: String) {
+        val pending = challenge ?: return
+        viewModelScope.launch {
+            _state.value = _state.value.copy(busy = true, failure = null)
+            val outcome = withContext(Dispatchers.IO) {
+                runCatching { api.completeSecondFactor(pending, code, method) }
+            }
+            _state.value = outcome.fold(
+                onSuccess = { result ->
+                    if (result is SignInOutcome.SignedIn) {
+                        challenge = null
+                        _state.value.copy(busy = false, stage = ServerStage.Vault)
+                    } else {
+                        _state.value.copy(busy = false, failure = "auth.error.invalidOtp")
+                    }
+                },
+                onFailure = { _state.value.copy(busy = false, failure = describe(it)) },
+            )
+        }
+    }
+
+    fun unlockVault(passphrase: String) {
+        viewModelScope.launch {
+            _state.value = _state.value.copy(busy = true, failure = null)
+            val outcome = withContext(Dispatchers.IO) { runCatching { api.unlockVault(passphrase) } }
+            _state.value = outcome.fold(
+                onSuccess = { _state.value.copy(busy = false, stage = ServerStage.Ready) },
+                onFailure = { _state.value.copy(busy = false, failure = describe(it)) },
+            )
+        }
+    }
+
+    /**
+     * Exchanges the log with the server, one event at a time.
+     *
+     * The same operations the two-phone transfer sends, through a different transport — one
+     * mechanism, three transports, which is what the specification promises and what makes this a
+     * few lines rather than a second implementation.
+     *
+     * Only events the server already knows about. An event created on this phone has no counterpart
+     * there yet, and inventing one from here would need the event key and the creation flow the
+     * server owns; those events stay local and say so.
+     */
+    fun sync() {
+        viewModelScope.launch {
+            _state.value = _state.value.copy(busy = true, failure = null, lastSync = null)
+            val outcome = withContext(Dispatchers.IO) {
+                runCatching {
+                    var sent = 0
+                    var applied = 0
+                    var skipped = 0
+                    val remote = api.events().toSet()
+                    val local = log.eventIds().toSet()
+
+                    // The union, not the local list. Iterating only what this phone already holds
+                    // makes an event that exists solely on the server unreachable: it is never
+                    // asked for, so it never arrives, and the screen says "received 0" as though
+                    // that were the truth. Joining a server is mostly about the events already
+                    // there.
+                    for (eventId in remote + local) {
+                        if (eventId !in remote) {
+                            // Local only. Nothing to sync with yet, and said rather than skipped
+                            // silently — an event this phone made has no counterpart there until
+                            // somebody creates it.
+                            skipped += 1
+                            continue
+                        }
+                        val mine = if (eventId in local) {
+                            log.since(eventId, cursor = "", limit = 500).operations
+                        } else {
+                            emptyList()
+                        }
+                        val result = api.sync(eventId, mine, cursor = null, eventPassword = null)
+                        sent += mine.size
+                        applied += log.accept(result.received)
+                            .count { it.state == AcceptState.APPLIED }
+                    }
+                    wallet.projectAll()
+                    SyncSummary(sent = sent, received = applied, localOnly = skipped)
+                }
+            }
+            _state.value = outcome.fold(
+                onSuccess = { _state.value.copy(busy = false, lastSync = it) },
+                onFailure = { _state.value.copy(busy = false, failure = describe(it)) },
+            )
+        }
+    }
+
+    fun forget() {
+        api.signOutLocally()
+        settings.clear()
+        challenge = null
+        _state.value = ServerUiState(address = "", stage = ServerStage.Address)
+    }
+
+    /**
+     * What went wrong, in the server's words where it said any.
+     *
+     * A `ServerException` already carries a translated message: the request asked for one. Anything
+     * else is the network, and saying so is more useful than a status code.
+     */
+    private fun describe(cause: Throwable): String = when (cause) {
+        is ServerException -> cause.message ?: "HTTP ${cause.status}"
+        else -> cause.message ?: "network"
+    }
+
+    private companion object {
+        fun stageFor(settings: ServerSettings) =
+            if (settings.isConfigured()) ServerStage.SignIn else ServerStage.Address
+    }
+}
+
+enum class ServerStage { Address, SignIn, SecondFactor, Vault, Ready }
+
+data class SyncSummary(val sent: Int, val received: Int, val localOnly: Int)
+
+data class ServerUiState(
+    val address: String = "",
+    val stage: ServerStage = ServerStage.Address,
+    val busy: Boolean = false,
+    val failure: String? = null,
+    val secondFactorMethods: List<String> = emptyList(),
+    val lastSync: SyncSummary? = null,
+)

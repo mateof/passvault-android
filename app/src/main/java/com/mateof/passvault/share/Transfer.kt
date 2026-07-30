@@ -2,6 +2,7 @@ package com.mateof.passvault.share
 
 import com.mateof.passvault.crypto.Base64Url
 import com.mateof.passvault.sync.Operation
+import com.mateof.passvault.sync.Operations
 import java.io.InputStream
 import java.io.OutputStream
 import kotlinx.serialization.json.Json
@@ -157,22 +158,7 @@ object Transfer {
             eventId = message.string("eventId"),
             cursor = message.string("cursor") ?: "",
             hasMore = message["hasMore"]?.jsonPrimitive?.content == "true",
-            operations = operations.map { operationFrom(it.jsonObject) },
-        )
-    }
-
-    fun operationFrom(source: JsonObject): Operation {
-        val actor = source["actorUserId"]?.jsonPrimitive
-        return Operation(
-            operationId = source.string("operationId").orEmpty(),
-            deviceId = source.string("deviceId").orEmpty(),
-            actorUserId = actor?.let { if (it.isString) it.content else null },
-            lamport = source["lamport"]?.jsonPrimitive?.content?.toLongOrNull() ?: 0L,
-            wallClock = source.string("wallClock").orEmpty(),
-            eventId = source["scope"]?.jsonObject?.string("id").orEmpty(),
-            type = source.string("type").orEmpty(),
-            body = source["body"]?.jsonObject ?: JsonObject(emptyMap()),
-            signature = source.string("signature"),
+            operations = operations.map { Operations.fromSignedJson(it.jsonObject) },
         )
     }
 

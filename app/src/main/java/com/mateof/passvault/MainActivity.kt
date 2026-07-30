@@ -14,6 +14,7 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.Share
@@ -110,6 +111,7 @@ private sealed interface Screen {
     data class Ticket(val detail: TicketDetail) : Screen
     data object Share : Screen
     data class Document(val eventId: String) : Screen
+    data object Server : Screen
 }
 
 @Composable
@@ -132,7 +134,9 @@ private fun PassVaultApp(
 
     // The system back gesture returns to the wallet rather than leaving the app, which is what a
     // user expects of a detail screen and what they do not get for free.
-    BackHandler(enabled = screen is Screen.Ticket || screen is Screen.Document) {
+    BackHandler(
+        enabled = screen is Screen.Ticket || screen is Screen.Document || screen is Screen.Server,
+    ) {
         screen = Screen.Wallet
     }
     BackHandler(enabled = proposal != null) { viewModel.discardProposal() }
@@ -282,6 +286,7 @@ private fun PassVaultApp(
                     onShare = { screen = Screen.Share },
                     onImport = { pickFile.launch(IMPORTABLE_TYPES) },
                     onCapture = { startCapture() },
+                    onServer = { screen = Screen.Server },
                 )
                 is Screen.Ticket -> TicketPane(
                     detail = current.detail,
@@ -291,6 +296,7 @@ private fun PassVaultApp(
                         screen = Screen.Document(current.detail.eventId)
                     },
                 )
+                Screen.Server -> ServerPane(onBack = { screen = Screen.Wallet })
                 is Screen.Document -> DocumentPane(
                     state = documentState,
                     onBack = { screen = Screen.Wallet },
@@ -319,6 +325,7 @@ private fun WalletPane(
     onShare: () -> Unit,
     onImport: () -> Unit,
     onCapture: () -> Unit,
+    onServer: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     // Collapses as the list scrolls, giving the content the whole screen once the user is reading
@@ -349,12 +356,52 @@ private fun WalletPane(
                             contentDescription = stringResource(R.string.action_share),
                         )
                     }
+                    IconButton(onClick = onServer) {
+                        Icon(
+                            Icons.Filled.Cloud,
+                            contentDescription = stringResource(R.string.server_title),
+                        )
+                    }
                 },
                 scrollBehavior = scrollBehavior,
             )
         },
     ) { padding ->
         WalletScreen(state = state, onTicketClick = onTicketClick, modifier = Modifier.padding(padding))
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ServerPane(
+    onBack: () -> Unit,
+    viewModel: com.mateof.passvault.ui.server.ServerViewModel = hiltViewModel(),
+) {
+    val state by viewModel.state.collectAsStateWithLifecycle()
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text(stringResource(R.string.server_title)) },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
+                    }
+                },
+            )
+        },
+    ) { padding ->
+        com.mateof.passvault.ui.server.ServerScreen(
+            state = state,
+            onAddressChange = viewModel::setAddress,
+            onConnect = viewModel::connect,
+            onSignIn = viewModel::signIn,
+            onSecondFactor = viewModel::submitSecondFactor,
+            onUnlock = viewModel::unlockVault,
+            onSync = viewModel::sync,
+            onForget = viewModel::forget,
+            modifier = Modifier.padding(padding),
+        )
     }
 }
 
