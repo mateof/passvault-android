@@ -50,7 +50,13 @@ class WalletRepositoryTest {
         // and handing them different ones would make the test pass for the wrong reason.
         val keys = InMemoryDeviceKeys()
         log = com.mateof.passvault.sync.OperationLog(database.operationDao(), keys)
-        repository = WalletRepository(database.walletDao(), keys, log)
+        repository = WalletRepository(
+            database.walletDao(),
+            keys,
+            log,
+            database.documentDao(),
+            DocumentStore(ApplicationProvider.getApplicationContext(), keys),
+        )
     }
 
     @After

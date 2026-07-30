@@ -60,4 +60,9 @@
     <string name="ticket_no_format">No se sabe qué tipo de código es este, así que no se puede dibujar. El número de arriba es el que vale.</string>
     <string name="ingest_event_name">Nombre del evento</string>
     <string name="action_capture">Hacer una foto</string>
+    <string name="document_title">Documento original</string>
+    <string name="document_loading">Abriendo el documento…</string>
+    <string name="document_unreadable">No se ha podido abrir el documento guardado.</string>
+    <string name="document_page">Página %1$d</string>
+    <string name="action_open_document">Ver el documento original</string>
 </resources>

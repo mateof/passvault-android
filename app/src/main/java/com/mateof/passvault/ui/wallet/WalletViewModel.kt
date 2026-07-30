@@ -1,5 +1,6 @@
 package com.mateof.passvault.ui.wallet
 
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.mateof.passvault.data.WalletRepository
@@ -59,10 +60,25 @@ class WalletViewModel @Inject constructor(
             if (proposal == null) {
                 _events.value = ImportOutcome.Unreadable
             } else {
+                // Held alongside the proposal, because saving happens later and by then the
+                // document would otherwise be gone: the user reviews first, and the pages the
+                // review leaves out are the ones worth keeping.
+                pendingSource = com.mateof.passvault.data.SourceDocument(
+                    bytes = bytes,
+                    mediaType = when (kind) {
+                        com.mateof.passvault.ingest.MediaKind.PDF -> "application/pdf"
+                        com.mateof.passvault.ingest.MediaKind.PNG -> "image/png"
+                        com.mateof.passvault.ingest.MediaKind.JPEG -> "image/jpeg"
+                        com.mateof.passvault.ingest.MediaKind.PKPASS -> "application/vnd.apple.pkpass"
+                    },
+                    pageCount = proposal.pageCount,
+                )
                 _pendingProposal.value = proposal
             }
         }
     }
+
+    private var pendingSource: com.mateof.passvault.data.SourceDocument? = null
 
     private val _pendingArchive = MutableStateFlow<ByteArray?>(null)
     val pendingArchive: StateFlow<ByteArray?> = _pendingArchive.asStateFlow()
@@ -76,15 +92,18 @@ class WalletViewModel @Inject constructor(
         val proposal = _pendingProposal.value ?: return
         viewModelScope.launch {
             val chosen = proposal.tickets.filter { included.contains(it.index) }
+            val source = pendingSource
             val saved = withContext(Dispatchers.Default) {
-                repository.saveProposed(eventName, chosen)
+                repository.saveProposed(eventName, chosen, source)
             }
+            pendingSource = null
             _pendingProposal.value = null
             _events.value = ImportOutcome.Saved(saved)
         }
     }
 
     fun discardProposal() {
+        pendingSource = null
         _pendingProposal.value = null
     }
 
@@ -177,11 +196,60 @@ class WalletViewModel @Inject constructor(
         }
     }
 
+    private val _document = MutableStateFlow(com.mateof.passvault.ui.document.DocumentViewState())
+    val document: StateFlow<com.mateof.passvault.ui.document.DocumentViewState> =
+        _document.asStateFlow()
+
+    /**
+     * Renders a stored document for viewing.
+     *
+     * Decrypted into memory and rasterised page by page; nothing is written anywhere a viewer
+     * application could read. Off the main thread because a long document is a lot of bitmaps.
+     */
+    fun openDocument(eventId: String) {
+        viewModelScope.launch {
+            _document.value = com.mateof.passvault.ui.document.DocumentViewState(isLoading = true)
+            val pages = withContext(Dispatchers.Default) {
+                runCatching {
+                    val stored = repository.documentsOf(eventId).firstOrNull()
+                        ?: return@runCatching emptyList()
+                    val bytes = repository.documentBytes(stored.id) ?: return@runCatching emptyList()
+                    val count = rasterizer.pageCount(bytes)
+                    (1..count).map { number ->
+                        val page = rasterizer.render(bytes, number, RENDER_WIDTH)
+                        com.mateof.passvault.ui.document.DocumentPage(
+                            number = number,
+                            image = android.graphics.Bitmap.createBitmap(
+                                page.pixels,
+                                page.width,
+                                page.height,
+                                android.graphics.Bitmap.Config.ARGB_8888,
+                            ).asImageBitmap(),
+                        )
+                    }
+                }.getOrDefault(emptyList())
+            }
+            _document.value = com.mateof.passvault.ui.document.DocumentViewState(
+                pages = pages,
+                isLoading = false,
+                failed = pages.isEmpty(),
+            )
+        }
+    }
+
+    suspend fun hasDocument(eventId: String): Boolean = repository.documentsOf(eventId).isNotEmpty()
+
     fun consumeOutcome() {
         _events.value = null
     }
 
     private data class TransientState(val isLoading: Boolean = false)
+
+    private companion object {
+        // Narrower than ingestion's 1600: this is for reading, not for decoding a dense barcode,
+        // and a long document at full width is a lot of bitmaps held at once.
+        const val RENDER_WIDTH = 1080
+    }
 }
 
 sealed interface ImportOutcome {

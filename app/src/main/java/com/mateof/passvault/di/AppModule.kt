@@ -21,7 +21,10 @@ object AppModule {
     @Singleton
     fun database(@ApplicationContext context: Context): PassVaultDatabase =
         Room.databaseBuilder(context, PassVaultDatabase::class.java, "passvault.db")
-            .addMigrations(com.mateof.passvault.data.MIGRATION_1_2)
+            .addMigrations(
+                com.mateof.passvault.data.MIGRATION_1_2,
+                com.mateof.passvault.data.MIGRATION_2_3,
+            )
             // No destructive fallback. A wallet is the only copy of tickets somebody paid for, and
             // wiping it on a schema change would be the worst possible way to handle an upgrade —
             // a missing migration should stop the build, not delete the user's data.
@@ -33,6 +36,18 @@ object AppModule {
     @Provides
     fun operationDao(database: PassVaultDatabase): com.mateof.passvault.data.OperationDao =
         database.operationDao()
+
+    @Provides
+    fun documentDao(database: PassVaultDatabase): com.mateof.passvault.data.DocumentDao =
+        database.documentDao()
+
+    @Provides
+    @Singleton
+    fun documentStore(
+        @ApplicationContext context: Context,
+        keys: DeviceKeys,
+    ): com.mateof.passvault.data.DocumentStore =
+        com.mateof.passvault.data.DocumentStore(context, keys)
 
     @Provides
     @Singleton
@@ -49,7 +64,9 @@ object AppModule {
         dao: WalletDao,
         keys: DeviceKeys,
         log: com.mateof.passvault.sync.OperationLog,
-    ): WalletRepository = WalletRepository(dao, keys, log)
+        documents: com.mateof.passvault.data.DocumentDao,
+        store: com.mateof.passvault.data.DocumentStore,
+    ): WalletRepository = WalletRepository(dao, keys, log, documents, store)
 
     @Provides
     @Singleton

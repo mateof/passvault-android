@@ -60,4 +60,9 @@
     <string name="ticket_no_format">The type of this barcode is unknown, so it cannot be drawn. The number above is what counts.</string>
     <string name="ingest_event_name">Event name</string>
     <string name="action_capture">Take a photo</string>
+    <string name="document_title">Original document</string>
+    <string name="document_loading">Opening the document…</string>
+    <string name="document_unreadable">The stored document could not be opened.</string>
+    <string name="document_page">Page %1$d</string>
+    <string name="action_open_document">View the original document</string>
 </resources>

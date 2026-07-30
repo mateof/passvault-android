@@ -138,14 +138,43 @@ data class TicketWithBarcode(
         TicketEntity::class,
         OperationEntity::class,
         DeviceEntity::class,
+        DocumentEntity::class,
     ],
-    version = 2,
+    version = 3,
     exportSchema = false,
 )
 abstract class PassVaultDatabase : RoomDatabase() {
     abstract fun walletDao(): WalletDao
 
     abstract fun operationDao(): OperationDao
+
+    abstract fun documentDao(): DocumentDao
+}
+
+/**
+ * Version 3 keeps the document a set of tickets was split out of.
+ *
+ * Only a row: the bytes live on disk as ciphertext, the way the `.tkpak` format and the server both
+ * store a blob. Nothing existing moves, so wallets from version 2 keep every ticket they had and
+ * simply have no source document for them — which is the truth, because it was thrown away.
+ */
+val MIGRATION_2_3 = object : Migration(2, 3) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS `documents` (
+                `id` TEXT NOT NULL,
+                `event_id` TEXT NOT NULL,
+                `media_type` TEXT NOT NULL,
+                `page_count` INTEGER NOT NULL,
+                `byte_count` INTEGER NOT NULL,
+                `created_at` TEXT NOT NULL,
+                PRIMARY KEY(`id`)
+            )
+            """.trimIndent(),
+        )
+        db.execSQL("CREATE INDEX IF NOT EXISTS `index_documents_event_id` ON `documents` (`event_id`)")
+    }
 }
 
 /**

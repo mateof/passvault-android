@@ -109,6 +109,7 @@ private sealed interface Screen {
     data object Wallet : Screen
     data class Ticket(val detail: TicketDetail) : Screen
     data object Share : Screen
+    data class Document(val eventId: String) : Screen
 }
 
 @Composable
@@ -124,13 +125,16 @@ private fun PassVaultApp(
     var screen by remember { mutableStateOf<Screen>(Screen.Wallet) }
     val proposal by viewModel.pendingProposal.collectAsStateWithLifecycle()
     val pendingArchive by viewModel.pendingArchive.collectAsStateWithLifecycle()
+    val documentState by viewModel.document.collectAsStateWithLifecycle()
     var excluded by remember { mutableStateOf(emptySet<Int>()) }
     val snackbars = remember { SnackbarHostState() }
     val context = LocalContext.current
 
     // The system back gesture returns to the wallet rather than leaving the app, which is what a
     // user expects of a detail screen and what they do not get for free.
-    BackHandler(enabled = screen is Screen.Ticket) { screen = Screen.Wallet }
+    BackHandler(enabled = screen is Screen.Ticket || screen is Screen.Document) {
+        screen = Screen.Wallet
+    }
     BackHandler(enabled = proposal != null) { viewModel.discardProposal() }
 
     /**
@@ -282,6 +286,14 @@ private fun PassVaultApp(
                 is Screen.Ticket -> TicketPane(
                     detail = current.detail,
                     onBack = { screen = Screen.Wallet },
+                    onOpenDocument = {
+                        viewModel.openDocument(current.detail.eventId)
+                        screen = Screen.Document(current.detail.eventId)
+                    },
+                )
+                is Screen.Document -> DocumentPane(
+                    state = documentState,
+                    onBack = { screen = Screen.Wallet },
                 )
                 Screen.Share -> SharePane(onBack = { screen = Screen.Wallet })
             }
@@ -348,7 +360,29 @@ private fun WalletPane(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun TicketPane(detail: TicketDetail, onBack: () -> Unit) {
+private fun DocumentPane(
+    state: com.mateof.passvault.ui.document.DocumentViewState,
+    onBack: () -> Unit,
+) {
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text(stringResource(R.string.document_title)) },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
+                    }
+                },
+            )
+        },
+    ) { padding ->
+        com.mateof.passvault.ui.document.DocumentScreen(state, Modifier.padding(padding))
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun TicketPane(detail: TicketDetail, onBack: () -> Unit, onOpenDocument: () -> Unit) {
     Scaffold(
         topBar = {
             TopAppBar(
@@ -361,7 +395,7 @@ private fun TicketPane(detail: TicketDetail, onBack: () -> Unit) {
             )
         },
     ) { padding ->
-        TicketDetailScreen(detail, Modifier.padding(padding))
+        TicketDetailScreen(detail, onOpenDocument, Modifier.padding(padding))
     }
 }
 

@@ -27,6 +27,8 @@ class WalletRepository(
     private val dao: WalletDao,
     private val keys: DeviceKeys,
     private val log: com.mateof.passvault.sync.OperationLog,
+    private val documents: DocumentDao,
+    private val documentStore: DocumentStore,
 ) {
     private fun aad(table: String, column: String, rowId: String) =
         "passvault/v1/field:$table.$column:$rowId"
@@ -144,10 +146,30 @@ class WalletRepository(
     suspend fun saveProposed(
         eventName: String,
         tickets: List<com.mateof.passvault.ingest.ProposedTicket>,
+        source: SourceDocument? = null,
         now: String = Ids.toInstant(),
     ): Int {
         if (tickets.isEmpty()) return 0
         val eventId = Ids.newId()
+
+        // The document the tickets were split out of, kept whole. The pages ingestion leaves out
+        // are the ones with no barcode, and those are exactly the pages that carry the
+        // instructions, the map and the terms — so the rule that makes the split right is the
+        // rule that would lose the rest.
+        if (source != null) {
+            val documentId = Ids.newId()
+            documentStore.write(documentId, source.bytes)
+            documents.upsert(
+                DocumentEntity(
+                    id = documentId,
+                    eventId = eventId,
+                    mediaType = source.mediaType,
+                    pageCount = source.pageCount,
+                    byteCount = source.bytes.size,
+                    createdAt = now,
+                ),
+            )
+        }
 
         log.registerSelf(eventId, null)
         log.append(
@@ -234,6 +256,15 @@ class WalletRepository(
         }
     }
 
+    /** The documents kept for an event, newest last. */
+    suspend fun documentsOf(eventId: String): List<StoredDocument> =
+        documents.forEvent(eventId).map {
+            StoredDocument(it.id, it.mediaType, it.pageCount, it.byteCount)
+        }
+
+    /** The decrypted bytes of one document, for rendering. Null if the file is gone. */
+    suspend fun documentBytes(documentId: String): ByteArray? = documentStore.read(documentId)
+
     /** Projects every event the log knows about. What a device does after a transfer. */
     suspend fun projectAll() {
         for (eventId in log.eventIds()) {
@@ -251,6 +282,7 @@ class WalletRepository(
         val row = dao.ticket(ticketId) ?: return null
         return com.mateof.passvault.ui.ticket.TicketDetail(
             id = row.id,
+            eventId = row.eventId,
             eventName = decrypt(row.eventNameCipher, "events", "name_cipher", row.eventId) ?: "",
             label = decrypt(row.labelCipher, "tickets", "label_cipher", row.id),
             seat = decrypt(row.seatCipher, "tickets", "seat_cipher", row.id),
@@ -258,6 +290,7 @@ class WalletRepository(
             barcodeValue = decrypt(row.barcodeCipher, "tickets", "barcode_cipher", row.id),
             holderLabel = decrypt(row.holderLabelCipher, "tickets", "holder_label_cipher", row.id),
             isProvisional = row.assignmentState == "PROVISIONAL",
+            hasDocument = documents.forEvent(row.eventId).isNotEmpty(),
         )
     }
 
@@ -271,3 +304,16 @@ class WalletRepository(
     suspend fun barcodeOf(ticketId: String, stored: ByteArray?): String? =
         decrypt(stored, "tickets", "barcode_cipher", ticketId)
 }
+
+/** A document about to be stored, with what is known about it before it is encrypted. */
+data class SourceDocument(val bytes: ByteArray, val mediaType: String, val pageCount: Int) {
+    override fun equals(other: Any?) = this === other
+    override fun hashCode() = System.identityHashCode(this)
+}
+
+data class StoredDocument(
+    val id: String,
+    val mediaType: String,
+    val pageCount: Int,
+    val byteCount: Int,
+)

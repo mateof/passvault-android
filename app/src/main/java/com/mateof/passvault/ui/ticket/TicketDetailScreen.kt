@@ -8,6 +8,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.ui.Alignment
@@ -27,6 +28,7 @@ import com.mateof.passvault.ui.theme.LocalSpacing
 @Immutable
 data class TicketDetail(
     val id: String,
+    val eventId: String,
     val eventName: String,
     val label: String?,
     val seat: String?,
@@ -34,11 +36,14 @@ data class TicketDetail(
     val barcodeValue: String?,
     val holderLabel: String?,
     val isProvisional: Boolean,
+    /** Whether the document this was split out of was kept. */
+    val hasDocument: Boolean = false,
 )
 
 @Composable
 fun TicketDetailScreen(
     detail: TicketDetail,
+    onOpenDocument: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val spacing = LocalSpacing.current
@@ -97,6 +102,15 @@ fun TicketDetailScreen(
                     textAlign = TextAlign.Center,
                 )
             }
+
+        if (detail.hasDocument) {
+            // Reached from the ticket rather than from a menu, because "where is the rest of the
+            // PDF" is a question somebody asks while looking at a ticket and finding no gate
+            // instructions on it.
+            TextButton(onClick = onOpenDocument) {
+                Text(stringResource(R.string.action_open_document))
+            }
+        }
 
         if (detail.isProvisional) {
             // Said on the screen the user would take to the gate, not only in the list. A claim made
