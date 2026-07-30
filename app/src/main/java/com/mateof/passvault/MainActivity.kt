@@ -178,15 +178,15 @@ private fun PassVaultApp(
                         onToggle = { index ->
                             excluded = if (excluded.contains(index)) excluded - index else excluded + index
                         },
-                        onConfirm = {
+                        onConfirm = { typedName ->
                             val chosen = pending.tickets
                                 .filter { it.include != excluded.contains(it.index) }
                                 .map { it.index }
                             excluded = emptySet()
-                            // A placeholder name until the review screen asks for one. It was a
-                            // bare Kotlin literal, which put an untranslated word on screen in
-                            // every language.
-                            viewModel.saveProposal(context.getString(R.string.ingest_event_default), chosen)
+                            viewModel.saveProposal(
+                                typedName.ifBlank { context.getString(R.string.ingest_event_default) },
+                                chosen,
+                            )
                         },
                     )
                 } ?: WalletPane(

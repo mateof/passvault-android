@@ -15,9 +15,14 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.pluralStringResource
@@ -56,11 +61,15 @@ data class IngestReviewState(
 fun IngestReviewScreen(
     state: IngestReviewState,
     onToggle: (Int) -> Unit,
-    onConfirm: () -> Unit,
+    onConfirm: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val spacing = LocalSpacing.current
     val chosen = state.rows.count { it.include }
+    // Asked for here rather than filled in afterwards, because this is the one moment the user is
+    // looking at the document and knows what it is. A wallet of events all called "Imported
+    // tickets" is what the placeholder produced, and renaming later is a screen nobody visits.
+    var eventName by rememberSaveable { mutableStateOf("") }
 
     Column(modifier = modifier.fillMaxSize()) {
         Text(
@@ -68,6 +77,17 @@ fun IngestReviewScreen(
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(spacing.medium),
+        )
+
+        OutlinedTextField(
+            value = eventName,
+            onValueChange = { eventName = it },
+            label = { Text(stringResource(R.string.ingest_event_name)) },
+            placeholder = { Text(stringResource(R.string.ingest_event_default)) },
+            singleLine = true,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = spacing.medium),
         )
 
         LazyColumn(
@@ -87,7 +107,9 @@ fun IngestReviewScreen(
         }
 
         Button(
-            onClick = onConfirm,
+            // Blank falls back to the placeholder rather than blocking the save. Somebody who did
+            // not name it still wants their tickets, and an unnamed event is recoverable.
+            onClick = { onConfirm(eventName.trim()) },
             enabled = chosen > 0,
             modifier = Modifier
                 .fillMaxWidth()
