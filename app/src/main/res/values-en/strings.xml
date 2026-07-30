@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="wallet_title">My tickets</string>
+    <string name="wallet_empty">No tickets yet. Import a PDF or a pass to get started.</string>
+    <string name="action_import">Import</string>
+    <string name="action_share">Share</string>
+    <string name="share_export_warning">Once somebody imports this file they hold the ticket barcode. It cannot be taken back afterwards.</string>
+    <string name="share_lan_compare">Check that both phones show the same six digits.</string>
+    <string name="claim_provisional">Awaiting confirmation</string>
+    <string name="vault_locked">Enter your vault passphrase to see your tickets.</string>
+</resources>

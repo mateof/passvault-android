@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Lets Android 13 and later offer a per-app language picker. Galician first:
+     it is the default, not a translation. -->
+<locale-config xmlns:android="http://schemas.android.com/apk/res/android">
+    <locale android:name="gl" />
+    <locale android:name="es" />
+    <locale android:name="en" />
+</locale-config>

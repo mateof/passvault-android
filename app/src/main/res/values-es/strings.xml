@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="wallet_title">Mis entradas</string>
+    <string name="wallet_empty">Todavía no tienes entradas. Importa un PDF o un pase para empezar.</string>
+    <string name="action_import">Importar</string>
+    <string name="action_share">Compartir</string>
+    <string name="share_export_warning">Cuando alguien importa este archivo ya tiene el código de la entrada. No se puede retirar después.</string>
+    <string name="share_lan_compare">Comprobad que los dos móviles muestran los mismos seis dígitos.</string>
+    <string name="claim_provisional">Pendiente de confirmar</string>
+    <string name="vault_locked">Introduce tu frase de acceso al baúl para ver las entradas.</string>
+</resources>

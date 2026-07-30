@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Galician: the default locale and the fallback for any language not listed.
+     This is a Galician-first application, so res/values holds Galician rather
+     than English. -->
+<resources>
+    <string name="app_name">PassVault</string>
+    <string name="wallet_title">As miñas entradas</string>
+    <string name="wallet_empty">Aínda non tes entradas. Importa un PDF ou un pase para empezar.</string>
+    <string name="action_import">Importar</string>
+    <string name="action_share">Compartir</string>
+    <string name="share_export_warning">Cando alguén importa este ficheiro xa ten o código da entrada. Non se pode retirar despois.</string>
+    <string name="share_lan_compare">Comprobade que os dous móbiles amosan os mesmos seis díxitos.</string>
+    <string name="claim_provisional">Pendente de confirmar</string>
+    <string name="vault_locked">Introduce a túa frase de acceso ao baúl para ver as entradas.</string>
+</resources>

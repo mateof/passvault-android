@@ -1,0 +1,18 @@
+# Signing material. Here from the first commit, not added after a mistake:
+# a keystore committed once is a keystore that must be replaced.
+*.jks
+*.keystore
+signing-credentials.txt
+local.properties
+
+# Build output
+build/
+app/build/
+.gradle/
+.kotlin/
+captures/
+
+# Editors
+.idea/
+*.iml
+.DS_Store
