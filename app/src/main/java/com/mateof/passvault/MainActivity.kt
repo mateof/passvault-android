@@ -39,6 +39,9 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.mateof.passvault.ui.ingest.IngestReviewScreen
+import com.mateof.passvault.ui.ingest.IngestReviewState
+import com.mateof.passvault.ui.ingest.ReviewRow
 import com.mateof.passvault.ui.theme.Motion
 import com.mateof.passvault.ui.theme.PassVaultTheme
 import com.mateof.passvault.ui.ticket.TicketDetail
@@ -95,13 +98,23 @@ private fun PassVaultApp(
     val outcome by viewModel.importOutcome.collectAsStateWithLifecycle()
 
     var screen by remember { mutableStateOf<Screen>(Screen.Wallet) }
-    var pendingImport by remember { mutableStateOf(sharedFile) }
+    val proposal by viewModel.pendingProposal.collectAsStateWithLifecycle()
+    val pendingArchive by viewModel.pendingArchive.collectAsStateWithLifecycle()
+    var excluded by remember { mutableStateOf(emptySet<Int>()) }
     val snackbars = remember { SnackbarHostState() }
     val context = LocalContext.current
 
     // The system back gesture returns to the wallet rather than leaving the app, which is what a
     // user expects of a detail screen and what they do not get for free.
     BackHandler(enabled = screen is Screen.Ticket) { screen = Screen.Wallet }
+    BackHandler(enabled = proposal != null) { viewModel.discardProposal() }
+
+    // A shared file is read once, and what it turns out to be decides which way it goes: a .tkpak
+    // asks for a password, anything else goes through review first.
+    LaunchedEffect(sharedFile) {
+        val uri = sharedFile ?: return@LaunchedEffect
+        viewModel.receive { context.contentResolver.openInputStream(uri)?.use { it.readBytes() } }
+    }
 
     LaunchedEffect(outcome) {
         val result = outcome ?: return@LaunchedEffect
@@ -115,6 +128,7 @@ private fun PassVaultApp(
                     append(context.getString(R.string.import_unverified_sender))
                 }
             }
+            is ImportOutcome.Saved -> context.getString(R.string.ingest_saved, result.ticketCount)
             is ImportOutcome.Failed -> result.code.name
             ImportOutcome.Unreadable -> context.getString(R.string.import_unreadable)
         }
@@ -130,7 +144,33 @@ private fun PassVaultApp(
             modifier = Modifier.padding(padding),
         ) { current ->
             when (current) {
-                Screen.Wallet -> WalletPane(
+                Screen.Wallet -> proposal?.let { pending ->
+                    IngestReviewScreen(
+                        state = IngestReviewState(
+                            pageCount = pending.pageCount,
+                            rows = pending.tickets.map { ticket ->
+                                ReviewRow(
+                                    index = ticket.index,
+                                    label = ticket.suggestedLabel,
+                                    barcodeValue = ticket.barcode?.value,
+                                    pageNumber = ticket.pageNumber,
+                                    include = ticket.include != excluded.contains(ticket.index),
+                                    warning = ticket.warnings.firstOrNull(),
+                                )
+                            },
+                        ),
+                        onToggle = { index ->
+                            excluded = if (excluded.contains(index)) excluded - index else excluded + index
+                        },
+                        onConfirm = {
+                            val chosen = pending.tickets
+                                .filter { it.include != excluded.contains(it.index) }
+                                .map { it.index }
+                            excluded = emptySet()
+                            viewModel.saveProposal("Importado", chosen)
+                        },
+                    )
+                } ?: WalletPane(
                     state = state,
                     onTicketClick = { ticketId ->
                         viewModel.openTicket(ticketId) { detail -> screen = Screen.Ticket(detail) }
@@ -144,17 +184,12 @@ private fun PassVaultApp(
         }
     }
 
-    pendingImport?.let { uri ->
+    pendingArchive?.let { bytes ->
         ImportDialog(
-            onDismiss = { pendingImport = null },
+            onDismiss = { viewModel.consumeArchive() },
             onConfirm = { password ->
-                pendingImport = null
-                // A file that cannot be read has to say so. Swallowing this left the user tapping
-                // Import and watching nothing happen, which is worse than any error message —
-                // and it is a real case: a sender can revoke the read grant before we get to it.
-                viewModel.importFrom(password) {
-                    context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
-                }
+                viewModel.consumeArchive()
+                viewModel.import(bytes, password)
             },
         )
     }

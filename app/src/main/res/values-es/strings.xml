@@ -16,4 +16,10 @@
     <string name="action_cancel">Cancelar</string>
     <string name="action_confirm_import">Importar</string>
     <string name="import_unreadable">No se ha podido leer el archivo. Puede que quien lo envió ya no permita acceder a él.</string>
+    <string name="ingest_review_explain">No todas las entradas vienen una por página: hay PDF con dos por hoja y otros con una portada de instrucciones. Revisa esto antes de guardarlo.</string>
+    <string name="ingest_confirm">Guardar %1$d entradas</string>
+    <string name="ingest_warning_no_barcode">No se ha encontrado ningún código en esta página.</string>
+    <string name="ingest_warning_multiple">Esta página tiene más de un código; el reparto es una suposición.</string>
+    <string name="ingest_warning_duplicate">Este código ya aparece en otra página. Guardarlo dos veces crearía el mismo asiento dos veces.</string>
+    <string name="ingest_saved">Se han guardado %1$d entradas.</string>
 </resources>

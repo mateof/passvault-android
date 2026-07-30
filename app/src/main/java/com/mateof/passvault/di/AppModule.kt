@@ -35,6 +35,11 @@ object AppModule {
 
     @Provides
     @Singleton
+    fun rasterizer(@ApplicationContext context: Context): com.mateof.passvault.ingest.PageRasterizer =
+        com.mateof.passvault.ingest.AndroidRasterizer(context)
+
+    @Provides
+    @Singleton
     fun walletRepository(dao: WalletDao, keys: DeviceKeys): WalletRepository =
         WalletRepository(dao, keys)
 }

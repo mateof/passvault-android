@@ -22,7 +22,71 @@ import kotlinx.coroutines.withContext
 @HiltViewModel
 class WalletViewModel @Inject constructor(
     private val repository: WalletRepository,
+    private val rasterizer: com.mateof.passvault.ingest.PageRasterizer,
 ) : ViewModel() {
+
+    private val _pendingProposal =
+        MutableStateFlow<com.mateof.passvault.ingest.IngestProposal?>(null)
+    val pendingProposal: StateFlow<com.mateof.passvault.ingest.IngestProposal?> =
+        _pendingProposal.asStateFlow()
+
+    /**
+     * Decides what arrived and routes it.
+     *
+     * A `.tkpak` needs a password and goes straight into the wallet; a PDF, an image or a pass goes
+     * through review first. The decision is made from the bytes, because the extension a messaging
+     * app attaches is not evidence of anything.
+     */
+    fun receive(read: () -> ByteArray?) {
+        viewModelScope.launch {
+            val bytes = withContext(Dispatchers.IO) { runCatching(read).getOrNull() }
+            if (bytes == null) {
+                _events.value = ImportOutcome.Unreadable
+                return@launch
+            }
+            // A .tkpak is a ZIP holding a manifest.json; detectMediaKind rejects it as an unknown
+            // archive, which is exactly how the two paths are told apart.
+            val kind = runCatching { com.mateof.passvault.ingest.detectMediaKind(bytes) }.getOrNull()
+            if (kind == null) {
+                _pendingArchive.value = bytes
+                return@launch
+            }
+            transient.value = TransientState(isLoading = true)
+            val proposal = withContext(Dispatchers.Default) {
+                runCatching { com.mateof.passvault.ingest.propose(bytes, rasterizer) }.getOrNull()
+            }
+            transient.value = TransientState(isLoading = false)
+            if (proposal == null) {
+                _events.value = ImportOutcome.Unreadable
+            } else {
+                _pendingProposal.value = proposal
+            }
+        }
+    }
+
+    private val _pendingArchive = MutableStateFlow<ByteArray?>(null)
+    val pendingArchive: StateFlow<ByteArray?> = _pendingArchive.asStateFlow()
+
+    fun consumeArchive() {
+        _pendingArchive.value = null
+    }
+
+    /** Saves what the user ticked, and nothing they did not. */
+    fun saveProposal(eventName: String, included: List<Int>) {
+        val proposal = _pendingProposal.value ?: return
+        viewModelScope.launch {
+            val chosen = proposal.tickets.filter { included.contains(it.index) }
+            val saved = withContext(Dispatchers.Default) {
+                repository.saveProposed(eventName, chosen)
+            }
+            _pendingProposal.value = null
+            _events.value = ImportOutcome.Saved(saved)
+        }
+    }
+
+    fun discardProposal() {
+        _pendingProposal.value = null
+    }
 
     private val transient = MutableStateFlow(TransientState())
 
@@ -128,6 +192,8 @@ sealed interface ImportOutcome {
     ) : ImportOutcome
 
     data class Failed(val code: TkpakError) : ImportOutcome
+
+    data class Saved(val ticketCount: Int) : ImportOutcome
 
     /** The file itself could not be read — a revoked grant, a deleted file, a broken share. */
     data object Unreadable : ImportOutcome

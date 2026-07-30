@@ -16,4 +16,10 @@
     <string name="action_cancel">Cancel</string>
     <string name="action_confirm_import">Import</string>
     <string name="import_unreadable">The file could not be read. The sender may no longer be allowing access to it.</string>
+    <string name="ingest_review_explain">Tickets do not always come one per page: some PDFs put two on a sheet and others lead with instructions. Check this before saving it.</string>
+    <string name="ingest_confirm">Save %1$d tickets</string>
+    <string name="ingest_warning_no_barcode">No barcode was found on this page.</string>
+    <string name="ingest_warning_multiple">This page holds more than one barcode; the split is a guess.</string>
+    <string name="ingest_warning_duplicate">This barcode already appears on another page. Saving both would create the same seat twice.</string>
+    <string name="ingest_saved">Saved %1$d tickets.</string>
 </resources>

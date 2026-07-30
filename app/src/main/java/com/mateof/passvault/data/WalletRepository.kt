@@ -127,6 +127,57 @@ class WalletRepository(
     }
 
     /**
+     * Saves the tickets a user confirmed from an ingestion proposal.
+     *
+     * The event is created here because a document carries no event of its own — the file is a
+     * stack of tickets, and which event they belong to is something only the person importing them
+     * knows. Named after the document until they rename it.
+     */
+    suspend fun saveProposed(
+        eventName: String,
+        tickets: List<com.mateof.passvault.ingest.ProposedTicket>,
+        now: String = Instant.now().toString(),
+    ): Int {
+        if (tickets.isEmpty()) return 0
+        val eventId = java.util.UUID.randomUUID().toString()
+        dao.upsertEvent(
+            EventEntity(
+                id = eventId,
+                nameCipher = encrypt(eventName, "events", "name_cipher", eventId),
+                venueCipher = null,
+                startsAt = null,
+                defaultAssignmentMode = "OPEN",
+                passwordProtected = 0,
+                createdAt = now,
+            ),
+        )
+        dao.upsertTickets(
+            tickets.map { proposed ->
+                val id = java.util.UUID.randomUUID().toString()
+                TicketEntity(
+                    id = id,
+                    eventId = eventId,
+                    labelCipher = encrypt(proposed.suggestedLabel, "tickets", "label_cipher", id),
+                    seatCipher = null,
+                    barcodeFormat = proposed.barcode?.format,
+                    barcodeCipher = proposed.barcode?.let {
+                        encrypt(it.value, "tickets", "barcode_cipher", id)
+                    },
+                    assignmentMode = "OPEN",
+                    assignmentState = "FREE",
+                    holderLabelCipher = null,
+                    paymentState = null,
+                    amountCents = null,
+                    currency = null,
+                    exportedAt = null,
+                    createdAt = now,
+                )
+            },
+        )
+        return tickets.size
+    }
+
+    /**
      * One ticket, decrypted, including its barcode.
      *
      * The barcode is decrypted here and nowhere else, because this is the only screen that shows
