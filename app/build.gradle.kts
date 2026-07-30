@@ -124,7 +124,7 @@ dependencies {
 
     implementation(libs.zxing.core)
     implementation(libs.pdfbox.android)
-    implementation(libs.argon2)
+    implementation(libs.bouncycastle)
 
     coreLibraryDesugaring(libs.desugar.jdk.libs)
 

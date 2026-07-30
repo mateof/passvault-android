@@ -94,3 +94,19 @@ Galician-first application, not an English one with translations.
 ## Licence
 
 GPL-3.0-or-later. See [LICENSE](LICENSE).
+
+## Refreshing the reference vectors
+
+`app/src/test/resources/vectors` is a copy of `spec/vectors` from the server
+repository. After an intentional change to the format, regenerate them there with
+`npm run vectors:generate` and copy them across:
+
+```bash
+cp -r ../passvault/spec/vectors/. app/src/test/resources/vectors/
+./gradlew :app:testDebugUnitTest --tests '*TkpakVector*'
+```
+
+Copied rather than shared through a submodule or a published artefact, because the
+alternative costs a release cycle on every format change to solve a problem that a
+`cp` and a failing test already solve. If that stops being true, the specification is
+the thing to keep stable — not the copying mechanism.
