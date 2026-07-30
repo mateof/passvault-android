@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <!-- Where a photo is written before it is ingested. The cache, not files: the picture is
+         read once, turned into a ticket, and deleted — a photograph of a barcode left on disk
+         is a plaintext ticket sitting outside the encrypted store. -->
+    <cache-path name="captures" path="captures/" />
+</paths>

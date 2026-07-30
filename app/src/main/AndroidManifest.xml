@@ -53,5 +53,19 @@
                 <data android:mimeType="application/octet-stream" />
             </intent-filter>
         </activity>
+
+        <!-- The camera hands its picture back by writing to a URI, and the URI has to belong
+             to this app. Without a provider there is nowhere for a full-resolution photo to
+             land, and the low-resolution thumbnail the camera returns instead is not enough
+             pixels to read a barcode from. -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.files"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
     </application>
 </manifest>

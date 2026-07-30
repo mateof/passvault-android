@@ -65,4 +65,5 @@
     </plurals>
     <string name="ticket_no_format">Non se sabe que tipo de código é este, así que non se pode debuxar. O número de arriba é o que vale.</string>
     <string name="ingest_event_name">Nome do evento</string>
+    <string name="action_capture">Sacar unha foto</string>
 </resources>

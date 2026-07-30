@@ -5,13 +5,17 @@ import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.FolderOpen
+import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.material3.AlertDialog
@@ -86,6 +90,21 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+/**
+ * What the picker offers.
+ *
+ * `application/octet-stream` is in the list because a `.tkpak` has no registered type on most
+ * devices and a picker that hides it makes the file unopenable — the same reason the manifest
+ * matches it for a share.
+ */
+private val IMPORTABLE_TYPES = arrayOf(
+    "application/pdf",
+    "image/*",
+    "application/vnd.apple.pkpass",
+    "application/vnd.passvault.tkpak",
+    "application/octet-stream",
+)
+
 private sealed interface Screen {
     data object Wallet : Screen
     data class Ticket(val detail: TicketDetail) : Screen
@@ -113,6 +132,68 @@ private fun PassVaultApp(
     // user expects of a detail screen and what they do not get for free.
     BackHandler(enabled = screen is Screen.Ticket) { screen = Screen.Wallet }
     BackHandler(enabled = proposal != null) { viewModel.discardProposal() }
+
+    /**
+     * Opening a document the user chose.
+     *
+     * `OpenDocument`, not `GetContent`: it returns a URI that survives the picker closing and
+     * can be re-read, and it shows the system file browser rather than a gallery. Both matter
+     * for a PDF sitting in Downloads, which is where a ticket from a vendor lands.
+     */
+    val pickFile = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument(),
+    ) { uri ->
+        if (uri != null) {
+            viewModel.receive { context.contentResolver.openInputStream(uri)?.use { it.readBytes() } }
+        }
+    }
+
+    // Where the camera will write. Held across the result, because the contract hands back only
+    // whether a picture was taken, not where it went.
+    var captureTarget by remember { mutableStateOf<Uri?>(null) }
+
+    val takePicture = rememberLauncherForActivityResult(
+        ActivityResultContracts.TakePicture(),
+    ) { taken ->
+        val uri = captureTarget
+        captureTarget = null
+        if (taken && uri != null) {
+            viewModel.receive {
+                context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+            }
+            // Deleted as soon as it has been read. A photograph of a barcode left in the cache
+            // is a plaintext ticket outside the encrypted store, which is what the rest of this
+            // app goes to some trouble to avoid.
+            runCatching { context.contentResolver.delete(uri, null, null) }
+        }
+    }
+
+    fun launchCapture() {
+        val directory = java.io.File(context.cacheDir, "captures").apply { mkdirs() }
+        val file = java.io.File(directory, "capture-${System.currentTimeMillis()}.jpg")
+        val uri = androidx.core.content.FileProvider.getUriForFile(
+            context,
+            "${context.packageName}.files",
+            file,
+        )
+        captureTarget = uri
+        takePicture.launch(uri)
+    }
+
+    // The camera permission is only demanded because the manifest declares it; an app that does
+    // not declare it can use the camera app without asking. It is declared for the scanner that
+    // reads a barcode live, so it has to be granted here too.
+    val requestCamera = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { granted -> if (granted) launchCapture() }
+
+    fun startCapture() {
+        val granted = androidx.core.content.ContextCompat.checkSelfPermission(
+            context,
+            android.Manifest.permission.CAMERA,
+        ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+        if (granted) launchCapture() else requestCamera.launch(android.Manifest.permission.CAMERA)
+    }
 
     // A shared file is read once, and what it turns out to be decides which way it goes: a .tkpak
     // asks for a password, anything else goes through review first.
@@ -195,6 +276,8 @@ private fun PassVaultApp(
                         viewModel.openTicket(ticketId) { detail -> screen = Screen.Ticket(detail) }
                     },
                     onShare = { screen = Screen.Share },
+                    onImport = { pickFile.launch(IMPORTABLE_TYPES) },
+                    onCapture = { startCapture() },
                 )
                 is Screen.Ticket -> TicketPane(
                     detail = current.detail,
@@ -222,6 +305,8 @@ private fun WalletPane(
     state: WalletUiState,
     onTicketClick: (String) -> Unit,
     onShare: () -> Unit,
+    onImport: () -> Unit,
+    onCapture: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     // Collapses as the list scrolls, giving the content the whole screen once the user is reading
@@ -234,6 +319,18 @@ private fun WalletPane(
             MediumTopAppBar(
                 title = { Text(stringResource(R.string.wallet_title)) },
                 actions = {
+                    IconButton(onClick = onImport) {
+                        Icon(
+                            Icons.Filled.FolderOpen,
+                            contentDescription = stringResource(R.string.action_import),
+                        )
+                    }
+                    IconButton(onClick = onCapture) {
+                        Icon(
+                            Icons.Filled.PhotoCamera,
+                            contentDescription = stringResource(R.string.action_capture),
+                        )
+                    }
                     IconButton(onClick = onShare) {
                         Icon(
                             Icons.Filled.Share,
