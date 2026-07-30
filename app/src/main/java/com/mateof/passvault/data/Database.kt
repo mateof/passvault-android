@@ -10,6 +10,8 @@ import androidx.room.OnConflictStrategy
 import androidx.room.PrimaryKey
 import androidx.room.Query
 import androidx.room.RoomDatabase
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -130,7 +132,65 @@ data class TicketWithBarcode(
     @ColumnInfo(name = "event_name_cipher") val eventNameCipher: ByteArray,
 )
 
-@Database(entities = [EventEntity::class, TicketEntity::class], version = 1, exportSchema = false)
+@Database(
+    entities = [
+        EventEntity::class,
+        TicketEntity::class,
+        OperationEntity::class,
+        DeviceEntity::class,
+    ],
+    version = 2,
+    exportSchema = false,
+)
 abstract class PassVaultDatabase : RoomDatabase() {
     abstract fun walletDao(): WalletDao
+
+    abstract fun operationDao(): OperationDao
+}
+
+/**
+ * Version 1 held only derived state; version 2 adds the log it should have been derived from.
+ *
+ * Written by hand rather than left to a destructive fallback. A wallet is the only copy of tickets
+ * somebody paid for, and the tickets already in it predate the log — they stay exactly where they
+ * are, and the log starts empty and grows from here.
+ */
+val MIGRATION_1_2 = object : Migration(1, 2) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS `operations` (
+                `operation_id` TEXT NOT NULL,
+                `event_id` TEXT NOT NULL,
+                `device_id` TEXT NOT NULL,
+                `actor_user_id` TEXT,
+                `lamport` INTEGER NOT NULL,
+                `wall_clock` TEXT NOT NULL,
+                `type` TEXT NOT NULL,
+                `body_cipher` BLOB NOT NULL,
+                `signature` TEXT NOT NULL,
+                `state` TEXT NOT NULL,
+                `reason` TEXT,
+                `received_at` TEXT NOT NULL,
+                PRIMARY KEY(`operation_id`)
+            )
+            """.trimIndent(),
+        )
+        db.execSQL("CREATE INDEX IF NOT EXISTS `index_operations_event_id` ON `operations` (`event_id`)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS `index_operations_received_at` ON `operations` (`received_at`)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS `index_operations_state` ON `operations` (`state`)")
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS `devices` (
+                `id` TEXT NOT NULL,
+                `signing_public_key` TEXT NOT NULL,
+                `agreement_public_key` TEXT,
+                `user_id` TEXT,
+                `name` TEXT,
+                `status` TEXT NOT NULL,
+                PRIMARY KEY(`id`)
+            )
+            """.trimIndent(),
+        )
+    }
 }

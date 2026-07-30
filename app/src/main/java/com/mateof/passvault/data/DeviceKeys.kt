@@ -22,6 +22,42 @@ import javax.crypto.spec.GCMParameterSpec
 interface DeviceKeys {
     /** The key wallet fields are encrypted with. Stable across launches. */
     fun vaultKey(): ByteArray
+
+    /** Who this device is when it signs an operation or pairs with another phone. */
+    fun identity(): DeviceIdentity
+}
+
+/**
+ * This device's identity in the operation log.
+ *
+ * Two keys with different jobs, kept apart for the same reason the vault passphrase is not the login
+ * password: one proves who wrote something and the other establishes a shared secret, and a key that
+ * does both is a key whose compromise costs twice.
+ *
+ * The signing key is what every operation this device produces is signed with, and what every other
+ * participant verifies against. The agreement key is what local pairing and sealed exports use.
+ * `deviceId` is the name both are registered under, and it never changes: rotating it would orphan
+ * every operation this device has already signed.
+ */
+class DeviceIdentity(
+    val deviceId: String,
+    val signingPrivateKey: ByteArray,
+    val agreementPrivateKey: ByteArray,
+) {
+    val signingPublicKey: ByteArray by lazy { Primitives.ed25519PublicKey(signingPrivateKey) }
+    val agreementPublicKey: ByteArray by lazy { Primitives.x25519PublicKey(agreementPrivateKey) }
+
+    /** Signs the already domain-separated input an operation is signed over. */
+    fun sign(signingInput: ByteArray): ByteArray =
+        Primitives.signEd25519(signingPrivateKey, signingInput)
+
+    companion object {
+        fun generate(deviceId: String = Ids.newId()): DeviceIdentity = DeviceIdentity(
+            deviceId = deviceId,
+            signingPrivateKey = Primitives.randomBytes(32),
+            agreementPrivateKey = Primitives.randomBytes(32),
+        )
+    }
 }
 
 /**
@@ -40,7 +76,11 @@ class KeyStoreDeviceKeys(context: Context) : DeviceKeys {
 
     private val cached: ByteArray by lazy { loadOrCreate() }
 
+    private val cachedIdentity: DeviceIdentity by lazy { loadOrCreateIdentity() }
+
     override fun vaultKey(): ByteArray = cached
+
+    override fun identity(): DeviceIdentity = cachedIdentity
 
     private fun loadOrCreate(): ByteArray {
         val stored = preferences.getString(WRAPPED_KEY, null)
@@ -50,6 +90,37 @@ class KeyStoreDeviceKeys(context: Context) : DeviceKeys {
         val vaultKey = Primitives.randomKey()
         preferences.edit().putString(WRAPPED_KEY, Base64Url.encode(wrap(vaultKey))).apply()
         return vaultKey
+    }
+
+    /**
+     * The device identity, created once and then never regenerated.
+     *
+     * Both private keys are wrapped by the same KeyStore key that protects the vault key, so they
+     * are useless on another device and useless here to anything that cannot ask the KeyStore. The
+     * two are stored as one blob rather than two entries: a device that had a signing key and no
+     * agreement key, because the second write failed, would be a device that can sign operations
+     * nobody can pair with.
+     */
+    private fun loadOrCreateIdentity(): DeviceIdentity {
+        val storedId = preferences.getString(DEVICE_ID, null)
+        val storedKeys = preferences.getString(WRAPPED_IDENTITY, null)
+        if (storedId != null && storedKeys != null) {
+            val keys = unwrap(Base64Url.decode(storedKeys))
+            return DeviceIdentity(
+                deviceId = storedId,
+                signingPrivateKey = keys.copyOfRange(0, 32),
+                agreementPrivateKey = keys.copyOfRange(32, 64),
+            )
+        }
+        val identity = DeviceIdentity.generate()
+        preferences.edit()
+            .putString(DEVICE_ID, identity.deviceId)
+            .putString(
+                WRAPPED_IDENTITY,
+                Base64Url.encode(wrap(identity.signingPrivateKey + identity.agreementPrivateKey)),
+            )
+            .apply()
+        return identity
     }
 
     private fun keyStoreKey(): SecretKey {
@@ -92,10 +163,17 @@ class KeyStoreDeviceKeys(context: Context) : DeviceKeys {
         const val TRANSFORMATION = "AES/GCM/NoPadding"
         const val IV_BYTES = 12
         const val WRAPPED_KEY = "wrapped_vault_key"
+        const val WRAPPED_IDENTITY = "wrapped_device_identity"
+        const val DEVICE_ID = "device_id"
     }
 }
 
-/** For tests. Holds the key in memory and never touches the platform. */
-class InMemoryDeviceKeys(private val key: ByteArray = Primitives.randomKey()) : DeviceKeys {
+/** For tests. Holds the keys in memory and never touches the platform. */
+class InMemoryDeviceKeys(
+    private val key: ByteArray = Primitives.randomKey(),
+    private val identity: DeviceIdentity = DeviceIdentity.generate(),
+) : DeviceKeys {
     override fun vaultKey(): ByteArray = key
+
+    override fun identity(): DeviceIdentity = identity
 }

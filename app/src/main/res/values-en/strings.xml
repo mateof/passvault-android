@@ -34,4 +34,27 @@
         <item quantity="one">Saved %1$d ticket.</item>
         <item quantity="other">Saved %1$d tickets.</item>
     </plurals>
+    <string name="share_looking">Looking for other phones on the same Wi-Fi.</string>
+    <string name="share_names_prove_nothing">Being on the same network identifies nobody: anyone can advertise under any name. That is why the six digits have to be compared.</string>
+    <string name="share_no_peers">No phones found yet…</string>
+    <string name="share_greeting">Connecting to %1$s…</string>
+    <string name="share_compare_title">Compare with both phones in front of you</string>
+    <string name="share_compare_explain">You must both see exactly the same six digits. If they differ, somebody is in the middle: do not continue.</string>
+    <string name="share_digits_match">The digits are the same</string>
+    <string name="share_digits_differ">They do not match</string>
+    <string name="share_transferring">Transferring…</string>
+    <string name="share_done_detail">%1$d operations were sent to the other phone.</string>
+    <string name="share_cancelled">The transfer was cancelled. Nothing moved.</string>
+    <string name="share_attacked">Nothing was transferred.</string>
+    <string name="share_attacked_detail">The two phones did not derive the same digits. That means something is relaying the connection. It is not a network fault.</string>
+    <string name="share_failed">The transfer could not be completed.</string>
+    <string name="share_error_tampered">A message failed its integrity check.</string>
+    <string name="share_error_connection">The connection to the other phone was lost.</string>
+    <string name="share_error_version">The other phone speaks a different version of the protocol.</string>
+    <string name="share_error_protocol">The conversation did not follow the expected protocol.</string>
+    <string name="action_done">Done</string>
+    <plurals name="share_done">
+        <item quantity="one">Received %1$d operation.</item>
+        <item quantity="other">Received %1$d operations.</item>
+    </plurals>
 </resources>

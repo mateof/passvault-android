@@ -1,0 +1,212 @@
+package com.mateof.passvault.ui.share
+
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.mateof.passvault.R
+import com.mateof.passvault.share.DiscoveredPeer
+import com.mateof.passvault.share.TransferError
+import com.mateof.passvault.ui.theme.LocalSpacing
+
+/**
+ * Passing tickets to a phone in the same room.
+ *
+ * The comparison step is the screen. Everything else here is plumbing around it, and the layout says
+ * so: the digits are the largest thing the application ever draws, monospaced and spaced out so two
+ * people can read them to each other across a table without misreading a 6 for an 8.
+ *
+ * The two buttons are deliberately not "OK" and "Cancel". One says the digits are the same and the
+ * other says they are not, because those are different facts with different consequences — the
+ * second one means somebody is relaying the connection, and the app says that in those words.
+ */
+@Composable
+fun ShareScreen(
+    state: ShareUiState,
+    onConnect: (DiscoveredPeer) -> Unit,
+    onDigitsMatch: () -> Unit,
+    onDigitsDiffer: () -> Unit,
+    onDone: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val spacing = LocalSpacing.current
+
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .padding(spacing.medium),
+        verticalArrangement = Arrangement.spacedBy(spacing.medium),
+    ) {
+        when (state.stage) {
+            ShareStage.Idle, ShareStage.Looking -> Looking(state, onConnect)
+            ShareStage.Greeting -> Busy(stringResource(R.string.share_greeting, state.peerName ?: ""))
+            ShareStage.Comparing -> Comparing(state, onDigitsMatch, onDigitsDiffer)
+            ShareStage.Transferring -> Busy(stringResource(R.string.share_transferring))
+            ShareStage.Done -> Outcome(
+                title = pluralStringResource(
+                    R.plurals.share_done,
+                    state.receivedCount,
+                    state.receivedCount,
+                ),
+                detail = stringResource(R.string.share_done_detail, state.sentCount),
+                onDone = onDone,
+            )
+            ShareStage.Cancelled -> Outcome(
+                title = stringResource(R.string.share_cancelled),
+                detail = null,
+                onDone = onDone,
+            )
+            ShareStage.Attacked -> Outcome(
+                title = stringResource(R.string.share_attacked),
+                detail = stringResource(R.string.share_attacked_detail),
+                onDone = onDone,
+            )
+            ShareStage.Failed -> Outcome(
+                title = stringResource(R.string.share_failed),
+                detail = state.failure?.let { stringResource(reasonOf(it)) },
+                onDone = onDone,
+            )
+        }
+    }
+}
+
+@Composable
+private fun Looking(state: ShareUiState, onConnect: (DiscoveredPeer) -> Unit) {
+    val spacing = LocalSpacing.current
+
+    Text(
+        text = stringResource(R.string.share_looking),
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    // Said before anything is found, not after. Somebody about to tap a name in a list is the person
+    // who needs to know that the name in the list proves nothing.
+    Text(
+        text = stringResource(R.string.share_names_prove_nothing),
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+
+    if (state.peers.isEmpty()) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(vertical = spacing.medium),
+            horizontalArrangement = Arrangement.spacedBy(spacing.medium),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+            Text(stringResource(R.string.share_no_peers), style = MaterialTheme.typography.bodyMedium)
+        }
+    }
+
+    LazyColumn(verticalArrangement = Arrangement.spacedBy(spacing.small)) {
+        items(state.peers, key = { it.name }) { peer ->
+            Card(
+                onClick = { onConnect(peer) },
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp),
+            ) {
+                Column(Modifier.padding(spacing.medium)) {
+                    Text(peer.name, style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        text = peer.address,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun Comparing(state: ShareUiState, onMatch: () -> Unit, onDiffer: () -> Unit) {
+    val spacing = LocalSpacing.current
+
+    Text(
+        text = stringResource(R.string.share_compare_title, state.peerName ?: ""),
+        style = MaterialTheme.typography.titleLarge,
+    )
+    Text(
+        text = stringResource(R.string.share_compare_explain),
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+
+    Text(
+        text = state.digits.orEmpty().toCharArray().joinToString(" "),
+        // The biggest thing the app draws, monospaced so every digit takes the same width and the
+        // grouping cannot shift as the value changes.
+        style = MaterialTheme.typography.displayLarge.copy(
+            fontFamily = FontFamily.Monospace,
+            fontSize = 44.sp,
+        ),
+        textAlign = TextAlign.Center,
+        modifier = Modifier.fillMaxWidth().padding(vertical = spacing.large),
+    )
+
+    Button(onClick = onMatch, modifier = Modifier.fillMaxWidth()) {
+        Text(stringResource(R.string.share_digits_match))
+    }
+    OutlinedButton(onClick = onDiffer, modifier = Modifier.fillMaxWidth()) {
+        Text(stringResource(R.string.share_digits_differ))
+    }
+}
+
+@Composable
+private fun Busy(message: String) {
+    val spacing = LocalSpacing.current
+
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(vertical = spacing.medium),
+        horizontalArrangement = Arrangement.spacedBy(spacing.medium),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+        Text(message, style = MaterialTheme.typography.bodyMedium)
+    }
+}
+
+@Composable
+private fun Outcome(title: String, detail: String?, onDone: () -> Unit) {
+    Text(title, style = MaterialTheme.typography.titleLarge)
+    detail?.let {
+        Text(
+            text = it,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+    Button(onClick = onDone, modifier = Modifier.fillMaxWidth()) {
+        Text(stringResource(R.string.action_done))
+    }
+}
+
+private fun reasonOf(error: TransferError): Int = when (error) {
+    TransferError.DIGITS_MISMATCH -> R.string.share_attacked_detail
+    TransferError.TAMPERED -> R.string.share_error_tampered
+    TransferError.CONNECTION_LOST -> R.string.share_error_connection
+    TransferError.UNSUPPORTED_VERSION -> R.string.share_error_version
+    TransferError.CANCELLED -> R.string.share_cancelled
+    TransferError.PROTOCOL -> R.string.share_error_protocol
+}

@@ -40,4 +40,27 @@
         <item quantity="one">Gardouse %1$d entrada.</item>
         <item quantity="other">Gardáronse %1$d entradas.</item>
     </plurals>
+    <string name="share_looking">Buscando outros móbiles na mesma wifi.</string>
+    <string name="share_names_prove_nothing">Estar na mesma rede non identifica a ninguén: calquera pode anunciarse co nome que queira. Por iso hai que comparar os seis díxitos.</string>
+    <string name="share_no_peers">Aínda non se atopou ningún móbil…</string>
+    <string name="share_greeting">Conectando con %1$s…</string>
+    <string name="share_compare_title">Comparade cos dous móbiles diante</string>
+    <string name="share_compare_explain">Os dous tedes que ver exactamente os mesmos seis díxitos. Se non coinciden, hai alguén no medio: non continuedes.</string>
+    <string name="share_digits_match">Os díxitos son os mesmos</string>
+    <string name="share_digits_differ">Non coinciden</string>
+    <string name="share_transferring">Transferindo…</string>
+    <string name="share_done_detail">Enviáronselle %1$d operacións ao outro móbil.</string>
+    <string name="share_cancelled">Cancelouse a transferencia. Non se moveu nada.</string>
+    <string name="share_attacked">Non se transferiu nada.</string>
+    <string name="share_attacked_detail">Os dous móbiles non derivaron os mesmos díxitos. Iso significa que algo está a retransmitir a conexión. Non é un fallo da rede.</string>
+    <string name="share_failed">Non se puido completar a transferencia.</string>
+    <string name="share_error_tampered">Unha mensaxe non superou a comprobación de integridade.</string>
+    <string name="share_error_connection">Perdeuse a conexión co outro móbil.</string>
+    <string name="share_error_version">O outro móbil usa unha versión distinta do protocolo.</string>
+    <string name="share_error_protocol">A conversa non seguiu o protocolo esperado.</string>
+    <string name="action_done">Feito</string>
+    <plurals name="share_done">
+        <item quantity="one">Recibiuse %1$d operación.</item>
+        <item quantity="other">Recibíronse %1$d operacións.</item>
+    </plurals>
 </resources>

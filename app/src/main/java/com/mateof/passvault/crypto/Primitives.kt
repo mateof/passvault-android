@@ -8,6 +8,7 @@ import javax.crypto.spec.GCMParameterSpec
 import javax.crypto.spec.SecretKeySpec
 import org.bouncycastle.crypto.agreement.X25519Agreement
 import org.bouncycastle.crypto.params.Argon2Parameters
+import org.bouncycastle.crypto.params.Ed25519PrivateKeyParameters
 import org.bouncycastle.crypto.params.Ed25519PublicKeyParameters
 import org.bouncycastle.crypto.params.X25519PrivateKeyParameters
 import org.bouncycastle.crypto.params.X25519PublicKeyParameters
@@ -112,6 +113,27 @@ object Primitives {
     }
 
     fun normalise(secret: String): String = Normalizer.normalize(secret, Normalizer.Form.NFC)
+
+    /**
+     * Ed25519 over an already domain-separated message.
+     *
+     * Takes the seed rather than a key object so the caller can keep the private key as bytes it
+     * wraps and stores, which is what the device identity does.
+     */
+    fun signEd25519(privateKey: ByteArray, message: ByteArray): ByteArray {
+        require(privateKey.size == 32) { "an Ed25519 seed is 32 bytes" }
+        val signer = Ed25519Signer().apply {
+            init(true, Ed25519PrivateKeyParameters(privateKey, 0))
+            update(message, 0, message.size)
+        }
+        return signer.generateSignature()
+    }
+
+    fun ed25519PublicKey(privateKey: ByteArray): ByteArray =
+        Ed25519PrivateKeyParameters(privateKey, 0).generatePublicKey().encoded
+
+    fun x25519PublicKey(privateKey: ByteArray): ByteArray =
+        X25519PrivateKeyParameters(privateKey, 0).generatePublicKey().encoded
 
     fun verifyEd25519(publicKey: ByteArray, message: ByteArray, signature: ByteArray): Boolean {
         if (publicKey.size != 32 || signature.size != 64) {

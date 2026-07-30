@@ -45,6 +45,31 @@ hotel Wi-Fi, any device can advertise itself under any name. The digits come fro
 key exchange itself, so a device sitting in the middle cannot make both screens agree
 — a mismatch is a detected attack, and the app refuses to continue.
 
+The confirmation each phone sends after the users agree travels **inside** the encrypted
+session rather than in the open, which is what turns the digits from a ritual into a
+check: a relay holds a different key with each side, so its forwarded confirmation fails
+to authenticate even if somebody waved the digits through.
+
+What crosses is the signed operation log — the same thing a `.tkpak` carries and the same
+request and response the server speaks. One mechanism, three transports.
+
+### Driving a transfer without two phones
+
+mDNS does not cross the emulator's NAT, so a workstation stands in for the second phone.
+`scripts/local-transfer-peer.ts` in the server repository speaks the same wire protocol
+using the server's own TypeScript crypto:
+
+```bash
+adb logcat -s PassVaultShare          # the port the app is listening on
+adb forward tcp:9999 tcp:<port>
+npx tsx scripts/local-transfer-peer.ts 9999
+```
+
+It prints the six digits it derived, and they have to match what the phone shows. That
+makes it a cross-implementation check as well as a harness: two independent
+implementations derive the digits from the same transcript, and a divergence is exactly
+what a user would meet as "the two phones disagree".
+
 ## The `.tkpak` format
 
 Files are AES-256-GCM encrypted and Ed25519 signed. The format is specified in the

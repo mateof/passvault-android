@@ -34,4 +34,27 @@
         <item quantity="one">Se ha guardado %1$d entrada.</item>
         <item quantity="other">Se han guardado %1$d entradas.</item>
     </plurals>
+    <string name="share_looking">Buscando otros móviles en la misma wifi.</string>
+    <string name="share_names_prove_nothing">Estar en la misma red no identifica a nadie: cualquiera puede anunciarse con el nombre que quiera. Por eso hay que comparar los seis dígitos.</string>
+    <string name="share_no_peers">Todavía no se ha encontrado ningún móvil…</string>
+    <string name="share_greeting">Conectando con %1$s…</string>
+    <string name="share_compare_title">Comparad con los dos móviles delante</string>
+    <string name="share_compare_explain">Los dos tenéis que ver exactamente los mismos seis dígitos. Si no coinciden, hay alguien en medio: no continuéis.</string>
+    <string name="share_digits_match">Los dígitos son los mismos</string>
+    <string name="share_digits_differ">No coinciden</string>
+    <string name="share_transferring">Transfiriendo…</string>
+    <string name="share_done_detail">Se le han enviado %1$d operaciones al otro móvil.</string>
+    <string name="share_cancelled">Se ha cancelado la transferencia. No se ha movido nada.</string>
+    <string name="share_attacked">No se ha transferido nada.</string>
+    <string name="share_attacked_detail">Los dos móviles no han derivado los mismos dígitos. Eso significa que algo está retransmitiendo la conexión. No es un fallo de la red.</string>
+    <string name="share_failed">No se ha podido completar la transferencia.</string>
+    <string name="share_error_tampered">Un mensaje no ha superado la comprobación de integridad.</string>
+    <string name="share_error_connection">Se ha perdido la conexión con el otro móvil.</string>
+    <string name="share_error_version">El otro móvil usa una versión distinta del protocolo.</string>
+    <string name="share_error_protocol">La conversación no ha seguido el protocolo esperado.</string>
+    <string name="action_done">Hecho</string>
+    <plurals name="share_done">
+        <item quantity="one">Se ha recibido %1$d operación.</item>
+        <item quantity="other">Se han recibido %1$d operaciones.</item>
+    </plurals>
 </resources>

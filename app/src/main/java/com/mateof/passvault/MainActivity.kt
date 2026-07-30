@@ -12,6 +12,8 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Share
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -42,6 +44,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.mateof.passvault.ui.ingest.IngestReviewScreen
 import com.mateof.passvault.ui.ingest.IngestReviewState
 import com.mateof.passvault.ui.ingest.ReviewRow
+import com.mateof.passvault.ui.share.ShareScreen
+import com.mateof.passvault.ui.share.ShareViewModel
 import com.mateof.passvault.ui.theme.Motion
 import com.mateof.passvault.ui.theme.PassVaultTheme
 import com.mateof.passvault.ui.ticket.TicketDetail
@@ -85,6 +89,7 @@ class MainActivity : ComponentActivity() {
 private sealed interface Screen {
     data object Wallet : Screen
     data class Ticket(val detail: TicketDetail) : Screen
+    data object Share : Screen
 }
 
 @Composable
@@ -189,11 +194,13 @@ private fun PassVaultApp(
                     onTicketClick = { ticketId ->
                         viewModel.openTicket(ticketId) { detail -> screen = Screen.Ticket(detail) }
                     },
+                    onShare = { screen = Screen.Share },
                 )
                 is Screen.Ticket -> TicketPane(
                     detail = current.detail,
                     onBack = { screen = Screen.Wallet },
                 )
+                Screen.Share -> SharePane(onBack = { screen = Screen.Wallet })
             }
         }
     }
@@ -214,6 +221,7 @@ private fun PassVaultApp(
 private fun WalletPane(
     state: WalletUiState,
     onTicketClick: (String) -> Unit,
+    onShare: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     // Collapses as the list scrolls, giving the content the whole screen once the user is reading
@@ -225,6 +233,14 @@ private fun WalletPane(
         topBar = {
             MediumTopAppBar(
                 title = { Text(stringResource(R.string.wallet_title)) },
+                actions = {
+                    IconButton(onClick = onShare) {
+                        Icon(
+                            Icons.Filled.Share,
+                            contentDescription = stringResource(R.string.action_share),
+                        )
+                    }
+                },
                 scrollBehavior = scrollBehavior,
             )
         },
@@ -249,6 +265,68 @@ private fun TicketPane(detail: TicketDetail, onBack: () -> Unit) {
         },
     ) { padding ->
         TicketDetailScreen(detail, Modifier.padding(padding))
+    }
+}
+
+/**
+ * Passing tickets to a phone in the same room.
+ *
+ * The permission is asked for here, at the moment the user chose to share, rather than at startup.
+ * Android 13 replaced the location permission this needs with `NEARBY_WIFI_DEVICES`; on anything
+ * older the manifest's scoped location entry covers it, so there is nothing to request.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SharePane(onBack: () -> Unit, viewModel: ShareViewModel = hiltViewModel()) {
+    val state by viewModel.state.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+    val deviceName = remember { android.os.Build.MODEL ?: "PassVault" }
+
+    var granted by remember {
+        mutableStateOf(
+            android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.TIRAMISU ||
+                androidx.core.content.ContextCompat.checkSelfPermission(
+                    context,
+                    android.Manifest.permission.NEARBY_WIFI_DEVICES,
+                ) == android.content.pm.PackageManager.PERMISSION_GRANTED,
+        )
+    }
+    val request = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.RequestPermission(),
+    ) { allowed -> granted = allowed }
+
+    LaunchedEffect(granted) {
+        if (granted) {
+            viewModel.start(deviceName)
+        } else {
+            request.launch(android.Manifest.permission.NEARBY_WIFI_DEVICES)
+        }
+    }
+
+    // Leaving the screen tears down the advertisement and the listening socket. A phone that keeps
+    // announcing itself after the user has moved on is a phone anybody in the café can dial.
+    DisposableEffect(Unit) { onDispose { viewModel.stop() } }
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text(stringResource(R.string.action_share)) },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
+                    }
+                },
+            )
+        },
+    ) { padding ->
+        ShareScreen(
+            state = state,
+            onConnect = viewModel::connect,
+            onDigitsMatch = viewModel::digitsMatch,
+            onDigitsDiffer = viewModel::digitsDiffer,
+            onDone = onBack,
+            modifier = Modifier.padding(padding),
+        )
     }
 }
 
