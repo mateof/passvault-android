@@ -127,6 +127,26 @@ class WalletRepository(
     }
 
     /**
+     * One ticket, decrypted, including its barcode.
+     *
+     * The barcode is decrypted here and nowhere else, because this is the only screen that shows
+     * one — the list would otherwise decrypt forty payloads to draw rows that never display them.
+     */
+    suspend fun detail(ticketId: String): com.mateof.passvault.ui.ticket.TicketDetail? {
+        val row = dao.ticket(ticketId) ?: return null
+        return com.mateof.passvault.ui.ticket.TicketDetail(
+            id = row.id,
+            eventName = decrypt(row.eventNameCipher, "events", "name_cipher", row.eventId) ?: "",
+            label = decrypt(row.labelCipher, "tickets", "label_cipher", row.id),
+            seat = decrypt(row.seatCipher, "tickets", "seat_cipher", row.id),
+            barcodeFormat = row.barcodeFormat,
+            barcodeValue = decrypt(row.barcodeCipher, "tickets", "barcode_cipher", row.id),
+            holderLabel = decrypt(row.holderLabelCipher, "tickets", "holder_label_cipher", row.id),
+            isProvisional = row.assignmentState == "PROVISIONAL",
+        )
+    }
+
+    /**
      * The barcode, decrypted only when it is about to be shown.
      *
      * Separate from the list on purpose: the wallet renders forty rows and none of them needs a

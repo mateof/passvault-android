@@ -8,4 +8,12 @@
     <string name="share_lan_compare">Comprobad que los dos móviles muestran los mismos seis dígitos.</string>
     <string name="claim_provisional">Pendiente de confirmar</string>
     <string name="vault_locked">Introduce tu frase de acceso al baúl para ver las entradas.</string>
+    <string name="claim_provisional_explain">Has reclamado esta entrada sin conexión. Todavía no es definitiva: se confirma cuando el dispositivo pueda sincronizar.</string>
+    <string name="import_password_label">Contraseña del evento</string>
+    <string name="import_title">Importar entradas</string>
+    <string name="import_done">Se han importado %1$d entradas de «%2$s».</string>
+    <string name="import_unverified_sender">No se ha podido verificar quién envió este archivo.</string>
+    <string name="action_cancel">Cancelar</string>
+    <string name="action_confirm_import">Importar</string>
+    <string name="import_unreadable">No se ha podido leer el archivo. Puede que quien lo envió ya no permita acceder a él.</string>
 </resources>

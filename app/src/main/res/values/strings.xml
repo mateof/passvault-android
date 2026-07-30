@@ -12,4 +12,12 @@
     <string name="share_lan_compare">Comprobade que os dous móbiles amosan os mesmos seis díxitos.</string>
     <string name="claim_provisional">Pendente de confirmar</string>
     <string name="vault_locked">Introduce a túa frase de acceso ao baúl para ver as entradas.</string>
+    <string name="claim_provisional_explain">Reclamaches esta entrada sen conexión. Aínda non é definitiva: confírmase cando o dispositivo poida sincronizar.</string>
+    <string name="import_password_label">Contrasinal do evento</string>
+    <string name="import_title">Importar entradas</string>
+    <string name="import_done">Importáronse %1$d entradas de «%2$s».</string>
+    <string name="import_unverified_sender">Non se puido verificar quen enviou este ficheiro.</string>
+    <string name="action_cancel">Cancelar</string>
+    <string name="action_confirm_import">Importar</string>
+    <string name="import_unreadable">Non se puido ler o ficheiro. Pode que quen o enviou xa non permita acceder a el.</string>
 </resources>

@@ -57,6 +57,23 @@ class WalletViewModel @Inject constructor(
      * Argon2id is deliberately expensive, so this runs off the main thread. Doing it inline would
      * freeze the interface for the best part of a second on the operation the user is watching.
      */
+    /**
+     * Reads the shared file and imports it.
+     *
+     * Reading is passed in as a lambda rather than done by the caller, so a file that cannot be
+     * opened reports through the same channel as a wrong password instead of vanishing.
+     */
+    fun importFrom(password: String, read: () -> ByteArray?) {
+        viewModelScope.launch {
+            val bytes = withContext(Dispatchers.IO) { runCatching(read).getOrNull() }
+            if (bytes == null) {
+                _events.value = ImportOutcome.Unreadable
+                return@launch
+            }
+            import(bytes, password)
+        }
+    }
+
     fun import(archive: ByteArray, password: String) {
         viewModelScope.launch {
             transient.value = TransientState(isLoading = true)
@@ -81,6 +98,21 @@ class WalletViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Loads one ticket and hands it back.
+     *
+     * Off the main thread, because this is where the barcode is decrypted — the one field the list
+     * deliberately never touches.
+     */
+    fun openTicket(ticketId: String, onLoaded: (com.mateof.passvault.ui.ticket.TicketDetail) -> Unit) {
+        viewModelScope.launch {
+            val detail = withContext(Dispatchers.Default) { repository.detail(ticketId) }
+            if (detail != null) {
+                onLoaded(detail)
+            }
+        }
+    }
+
     fun consumeOutcome() {
         _events.value = null
     }
@@ -96,4 +128,7 @@ sealed interface ImportOutcome {
     ) : ImportOutcome
 
     data class Failed(val code: TkpakError) : ImportOutcome
+
+    /** The file itself could not be read — a revoked grant, a deleted file, a broken share. */
+    data object Unreadable : ImportOutcome
 }

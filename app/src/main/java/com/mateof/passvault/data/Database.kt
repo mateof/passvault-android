@@ -99,12 +99,36 @@ interface WalletDao {
     )
     fun wallet(): Flow<List<TicketWithEvent>>
 
+    /**
+     * One ticket, with its barcode.
+     *
+     * Separate from the list query on purpose: the list never selects a barcode, so scrolling forty
+     * rows neither decrypts forty payloads nor holds them all in memory.
+     */
+    @Query(
+        "SELECT t.*, e.name_cipher AS event_name_cipher FROM tickets t " +
+            "JOIN events e ON e.id = t.event_id WHERE t.id = :ticketId",
+    )
+    suspend fun ticket(ticketId: String): TicketWithBarcode?
+
     @Query("SELECT COUNT(*) FROM tickets")
     suspend fun ticketCount(): Int
 
     @Query("DELETE FROM tickets WHERE id = :ticketId")
     suspend fun deleteTicket(ticketId: String)
 }
+
+data class TicketWithBarcode(
+    @ColumnInfo(name = "id") val id: String,
+    @ColumnInfo(name = "label_cipher") val labelCipher: ByteArray?,
+    @ColumnInfo(name = "seat_cipher") val seatCipher: ByteArray?,
+    @ColumnInfo(name = "barcode_format") val barcodeFormat: String?,
+    @ColumnInfo(name = "barcode_cipher") val barcodeCipher: ByteArray?,
+    @ColumnInfo(name = "assignment_state") val assignmentState: String,
+    @ColumnInfo(name = "holder_label_cipher") val holderLabelCipher: ByteArray?,
+    @ColumnInfo(name = "event_id") val eventId: String,
+    @ColumnInfo(name = "event_name_cipher") val eventNameCipher: ByteArray,
+)
 
 @Database(entities = [EventEntity::class, TicketEntity::class], version = 1, exportSchema = false)
 abstract class PassVaultDatabase : RoomDatabase() {

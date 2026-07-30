@@ -8,4 +8,12 @@
     <string name="share_lan_compare">Check that both phones show the same six digits.</string>
     <string name="claim_provisional">Awaiting confirmation</string>
     <string name="vault_locked">Enter your vault passphrase to see your tickets.</string>
+    <string name="claim_provisional_explain">You claimed this ticket while offline. It is not final yet: it is confirmed once the device can synchronise.</string>
+    <string name="import_password_label">Event password</string>
+    <string name="import_title">Import tickets</string>
+    <string name="import_done">Imported %1$d tickets from “%2$s”.</string>
+    <string name="import_unverified_sender">The sender of this file could not be verified.</string>
+    <string name="action_cancel">Cancel</string>
+    <string name="action_confirm_import">Import</string>
+    <string name="import_unreadable">The file could not be read. The sender may no longer be allowing access to it.</string>
 </resources>
