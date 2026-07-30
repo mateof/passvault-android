@@ -72,9 +72,15 @@ never requires the production key.
 
 ## Signing and releases
 
-`setup-signing.ps1` is run once. It generates the keystore, uploads the four secrets
-to GitHub and writes the credentials to a file that is gitignored from the first
-commit — a keystore committed once is a keystore that has to be replaced.
+Signing is set up once, from a script kept **outside this repository** and gitignored. It
+generates the keystore with `keytool`, sets four repository secrets — `KEYSTORE_BASE64`,
+`KEYSTORE_PASSWORD`, `KEY_PASSWORD` and `KEY_ALIAS` — and writes the password and a base64
+copy of the keystore to a local file for safekeeping. Neither the keystore nor that file is
+ever committed: a keystore committed once is a keystore that has to be replaced.
+
+The script itself holds no secret, but it carries the certificate's distinguished name and
+the paths of the machine it runs on, which is reason enough for it not to be public. The
+release workflow only needs the four secrets to exist.
 
 Merging to `main` publishes a release automatically. `versionName` in
 `app/build.gradle.kts` is the version; `versionCode` comes from the CI run number,

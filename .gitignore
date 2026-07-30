@@ -5,6 +5,11 @@
 signing-credentials.txt
 local.properties
 
+# The script that creates the signing key. It holds no secret — it generates them — but it
+# does carry the certificate's distinguished name and the paths of the machine it runs on,
+# and none of that belongs in a public repository. It runs once, from a local copy.
+setup-signing.ps1
+
 # Build output
 build/
 app/build/
