@@ -20,7 +20,7 @@ android {
         // Raised by CI from the run number. Bumping it by hand is the usual
         // reason an update refuses to install.
         versionCode = (System.getenv("VERSION_CODE") ?: "1").toInt()
-        versionName = "0.2.0"
+        versionName = "0.3.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         resourceConfigurations += listOf("gl", "es", "en")
@@ -124,8 +124,6 @@ dependencies {
 
     implementation(libs.okhttp.core)
     implementation(libs.okhttp.logging)
-    implementation(libs.retrofit.core)
-    implementation(libs.retrofit.kotlinx.serialization)
 
     implementation(libs.zxing.core)
     // PdfBox-Android carries its own Bouncy Castle under the older artefact name
