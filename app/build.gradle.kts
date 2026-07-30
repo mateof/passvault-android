@@ -103,6 +103,7 @@ dependencies {
     debugImplementation(libs.compose.ui.tooling)
 
     implementation(libs.lifecycle.runtime.compose)
+    implementation(libs.lifecycle.runtime.ktx)
     implementation(libs.lifecycle.viewmodel.compose)
     implementation(libs.navigation.compose)
 
@@ -149,4 +150,5 @@ dependencies {
 
     androidTestImplementation(libs.androidx.test.junit)
     androidTestImplementation(libs.espresso.core)
+    androidTestImplementation(libs.androidx.test.core)
 }

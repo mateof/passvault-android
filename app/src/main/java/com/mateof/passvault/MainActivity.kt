@@ -10,14 +10,17 @@ import androidx.compose.material3.MediumTopAppBar
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.rememberTopAppBarState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.res.stringResource
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.mateof.passvault.ui.theme.PassVaultTheme
 import com.mateof.passvault.ui.wallet.WalletScreen
-import com.mateof.passvault.ui.wallet.initialWalletState
+import com.mateof.passvault.ui.wallet.WalletViewModel
 import dagger.hilt.android.AndroidEntryPoint
 
 @AndroidEntryPoint
@@ -37,15 +40,14 @@ class MainActivity : ComponentActivity() {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun Wallet() {
-    // Collapses as the list scrolls, which gives the content the whole screen once the user is
-    // reading rather than navigating.
-    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior(
-        rememberTopAppBarState(),
-    )
-    // Empty until persistence lands. Debug builds seed a sample so the screen can actually be
-    // looked at; see src/debug/SampleWallet.
-    val state = remember { initialWalletState() }
+private fun Wallet(viewModel: WalletViewModel = hiltViewModel()) {
+    // collectAsStateWithLifecycle, not collectAsState: the database query should stop while the app
+    // is in the background rather than keep the process awake for a screen nobody is looking at.
+    val state by viewModel.state.collectAsStateWithLifecycle()
+
+    // Collapses as the list scrolls, giving the content the whole screen once the user is reading
+    // rather than navigating.
+    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior(rememberTopAppBarState())
 
     Scaffold(
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
@@ -63,7 +65,3 @@ private fun Wallet() {
         )
     }
 }
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun rememberTopAppBarState() = androidx.compose.material3.rememberTopAppBarState()
