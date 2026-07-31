@@ -1,7 +1,10 @@
 package com.mateof.passvault.ui.server
 
+import android.os.Build
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.mateof.passvault.crypto.Base64Url
+import com.mateof.passvault.data.DeviceKeys
 import com.mateof.passvault.data.WalletRepository
 import com.mateof.passvault.server.ServerApi
 import com.mateof.passvault.server.ServerException
@@ -38,7 +41,20 @@ class ServerViewModel @Inject constructor(
     private val api: ServerApi,
     private val log: OperationLog,
     private val wallet: WalletRepository,
+    private val keys: DeviceKeys,
 ) : ViewModel() {
+
+    /**
+     * What this device is called on the server's device list.
+     *
+     * The model rather than anything the user typed: it is shown next to a signing key in a list
+     * of devices, and "Pixel 8" tells its owner which one to revoke where "Android" does not.
+     */
+    private val deviceName: String = listOf(Build.MANUFACTURER, Build.MODEL)
+        .filter { it.isNotBlank() }
+        .joinToString(" ")
+        .ifBlank { "Android" }
+        .take(120)
 
     private val _state = MutableStateFlow(
         ServerUiState(address = settings.baseUrl(), stage = stageFor(settings)),
@@ -143,9 +159,10 @@ class ServerViewModel @Inject constructor(
      * mechanism, three transports, which is what the specification promises and what makes this a
      * few lines rather than a second implementation.
      *
-     * Only events the server already knows about. An event created on this phone has no counterpart
-     * there yet, and inventing one from here would need the event key and the creation flow the
-     * server owns; those events stay local and say so.
+     * Events made on this phone are uploaded too. The server creates one from the `event.create`
+     * the log already carries, keeping the identifier this device signs against — so a wallet built
+     * entirely offline, which is how the app is meant to be used, ends up there rather than being
+     * counted as "local only" and skipped while the screen reports a successful synchronisation.
      */
     fun sync() {
         viewModelScope.launch {
@@ -154,7 +171,14 @@ class ServerViewModel @Inject constructor(
                 runCatching {
                     var sent = 0
                     var applied = 0
-                    var skipped = 0
+                    var published = 0
+
+                    // Before anything is pushed. The server verifies every operation against a
+                    // registered signing key and holds back what it cannot verify, so skipping
+                    // this uploads a wallet that lands entirely in quarantine — and reports
+                    // success while doing it.
+                    announceThisDevice()
+
                     val remote = api.events().toSet()
                     val local = log.eventIds().toSet()
 
@@ -164,13 +188,6 @@ class ServerViewModel @Inject constructor(
                     // that were the truth. Joining a server is mostly about the events already
                     // there.
                     for (eventId in remote + local) {
-                        if (eventId !in remote) {
-                            // Local only. Nothing to sync with yet, and said rather than skipped
-                            // silently — an event this phone made has no counterpart there until
-                            // somebody creates it.
-                            skipped += 1
-                            continue
-                        }
                         val mine = if (eventId in local) {
                             log.since(eventId, cursor = "", limit = 500).operations
                         } else {
@@ -178,11 +195,12 @@ class ServerViewModel @Inject constructor(
                         }
                         val result = api.sync(eventId, mine, cursor = null, eventPassword = null)
                         sent += mine.size
+                        if (result.created) published += 1
                         applied += log.accept(result.received)
                             .count { it.state == AcceptState.APPLIED }
                     }
                     wallet.projectAll()
-                    SyncSummary(sent = sent, received = applied, localOnly = skipped)
+                    SyncSummary(sent = sent, received = applied, published = published)
                 }
             }
             _state.value = outcome.fold(
@@ -190,6 +208,27 @@ class ServerViewModel @Inject constructor(
                 onFailure = { _state.value.copy(busy = false, failure = describe(it)) },
             )
         }
+    }
+
+    /**
+     * Registers this device's signing key with the server.
+     *
+     * Idempotent and cheap, so it runs on every synchronisation rather than once at sign-in: the
+     * alternative is remembering whether it was done, per server, and being wrong about it after a
+     * reinstall or a restore — where the cost of being wrong is a wallet that uploads into
+     * quarantine.
+     *
+     * The identifier is the one this device already signs with, never a new one. Rotating it would
+     * orphan every operation it has ever produced.
+     */
+    private fun announceThisDevice() {
+        val identity = keys.identity()
+        api.registerDevice(
+            deviceId = identity.deviceId,
+            name = deviceName,
+            signingPublicKey = Base64Url.encode(identity.signingPublicKey),
+            agreementPublicKey = Base64Url.encode(identity.agreementPublicKey),
+        )
     }
 
     /** Loads the groups this account belongs to. Only meaningful once the vault is open. */
@@ -315,7 +354,12 @@ class ServerViewModel @Inject constructor(
 
 enum class ServerStage { Address, SignIn, SecondFactor, Vault, Ready }
 
-data class SyncSummary(val sent: Int, val received: Int, val localOnly: Int)
+data class SyncSummary(
+    val sent: Int,
+    val received: Int,
+    /** Events this synchronisation created on the server, having existed only on this phone. */
+    val published: Int,
+)
 
 data class ServerUiState(
     val address: String = "",

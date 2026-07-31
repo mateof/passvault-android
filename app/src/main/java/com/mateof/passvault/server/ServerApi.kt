@@ -162,6 +162,33 @@ class ServerApi(private val settings: ServerSettings) {
             ?: emptyList()
 
     /**
+     * Tells the server which device this is, and what its signatures look like.
+     *
+     * Has to happen before anything is pushed. The server verifies every operation against a
+     * registered signing key, and holds back what it cannot verify — so an unregistered device
+     * uploads a wallet that lands entirely in quarantine and reports success while doing it.
+     *
+     * Idempotent, and keyed on the signing key rather than on the identifier: registering twice
+     * returns the same device, and the identifier this device already signs with is kept, because
+     * changing it would orphan every operation it has produced.
+     */
+    fun registerDevice(
+        deviceId: String,
+        name: String,
+        signingPublicKey: String,
+        agreementPublicKey: String,
+    ): String =
+        call(
+            "/api/v1/devices",
+            buildJsonObject {
+                put("deviceId", deviceId)
+                put("name", name)
+                put("signingPublicKey", signingPublicKey)
+                put("agreementPublicKey", agreementPublicKey)
+            },
+        ).text("deviceId").orEmpty()
+
+    /**
      * One round trip in both directions, which is what the server offers and what a phone wants.
      *
      * What is sent is applied before what comes back is computed, so a device never receives a view
@@ -188,6 +215,9 @@ class ServerApi(private val settings: ServerSettings) {
             hasMore = result["hasMore"]?.jsonPrimitive?.content == "true",
             nextLamport = result["nextLamport"]?.jsonPrimitive?.content?.toLongOrNull() ?: 0L,
             accepted = (result["accepted"] as? JsonArray).orEmpty().size,
+            // True when this call is what brought the event into existence there, which is a
+            // different thing to tell the user than "we exchanged some operations".
+            created = result["created"]?.jsonPrimitive?.content == "true",
         )
     }
 
@@ -283,6 +313,8 @@ data class SyncResult(
     /** What the server says this device's clock should be at least. */
     val nextLamport: Long,
     val accepted: Int,
+    /** True when this synchronisation is what created the event on the server. */
+    val created: Boolean = false,
 )
 
 class ServerException(

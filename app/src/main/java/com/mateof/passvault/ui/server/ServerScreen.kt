@@ -265,14 +265,14 @@ private fun ReadyStep(
             text = pluralStringResource(R.plurals.server_sync_done, summary.received, summary.received),
             style = MaterialTheme.typography.bodyMedium,
         )
-        if (summary.localOnly > 0) {
-            // Said rather than hidden. An event this phone made has no counterpart on the server
-            // yet, and a sync that silently skipped it would look like a sync that worked.
+        if (summary.published > 0) {
+            // Worth its own line. "Received 3 operations" says nothing about the event this phone
+            // made, and that is the one the user was waiting to see arrive.
             Text(
                 text = pluralStringResource(
-                    R.plurals.server_sync_local_only,
-                    summary.localOnly,
-                    summary.localOnly,
+                    R.plurals.server_sync_published,
+                    summary.published,
+                    summary.published,
                 ),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.secondary,
