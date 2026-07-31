@@ -101,6 +101,25 @@ class WalletRepository(
         dao.setEventMark(eventId, icon, colour)
     }
 
+    /**
+     * The documents an event's tickets were split out of, watched.
+     *
+     * Nothing here is encrypted: a media type, a page count and a size. The bytes are ciphertext
+     * on disk and are only decrypted when somebody opens one, which is the point at which they
+     * asked to see it.
+     */
+    fun documentRowsOf(eventId: String): Flow<List<com.mateof.passvault.ui.wallet.DocumentRow>> =
+        documents.forEventFlow(eventId).map { rows ->
+            rows.map { row ->
+                com.mateof.passvault.ui.wallet.DocumentRow(
+                    id = row.id,
+                    mediaType = row.mediaType,
+                    pageCount = row.pageCount,
+                    byteCount = row.byteCount,
+                )
+            }
+        }
+
     /** The tickets of one event, decrypted the same way as the wallet list. */
     fun ticketsOf(eventId: String, locale: Locale = Locale.getDefault()): Flow<List<TicketRow>> =
         dao.ticketsOf(eventId).map { rows ->

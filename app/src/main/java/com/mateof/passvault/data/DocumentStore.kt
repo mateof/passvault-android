@@ -44,6 +44,10 @@ interface DocumentDao {
     @Query("SELECT * FROM documents WHERE event_id = :eventId ORDER BY created_at ASC")
     suspend fun forEvent(eventId: String): List<DocumentEntity>
 
+    /** The same, watched. An import while the event is on screen should appear in its annex. */
+    @Query("SELECT * FROM documents WHERE event_id = :eventId ORDER BY created_at ASC")
+    fun forEventFlow(eventId: String): kotlinx.coroutines.flow.Flow<List<DocumentEntity>>
+
     @Query("SELECT * FROM documents WHERE id = :id")
     suspend fun byId(id: String): DocumentEntity?
 

@@ -83,6 +83,9 @@ fun WalletScreen(
     state: WalletUiState,
     onTicketClick: (String) -> Unit,
     modifier: Modifier = Modifier,
+    /** The files these tickets were split out of. Empty for an event nobody imported. */
+    documents: List<DocumentRow> = emptyList(),
+    onOpenDocument: (String) -> Unit = {},
 ) {
     val spacing = LocalSpacing.current
 
@@ -97,13 +100,18 @@ fun WalletScreen(
 
         when {
             state.isLocked -> Message(stringResource(R.string.vault_locked))
-            state.tickets.isEmpty() && !state.isLoading ->
+            state.tickets.isEmpty() && documents.isEmpty() && !state.isLoading ->
                 Message(stringResource(R.string.wallet_empty))
             else -> LazyColumn(
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(spacing.medium),
                 verticalArrangement = Arrangement.spacedBy(spacing.small),
             ) {
+                // Above the tickets and inside the same scroll, so it is part of the event rather
+                // than a bar pinned over it. It scrolls away once somebody is reading their passes.
+                items(documents, key = { "document-" + it.id }, contentType = { "document" }) { row ->
+                    DocumentAnnexCard(document = row, onOpen = onOpenDocument)
+                }
                 items(
                     items = state.tickets,
                     // A stable key is what lets a single row animate when its state changes, instead

@@ -159,6 +159,23 @@ class WalletViewModel @Inject constructor(
             initialValue = emptyList(),
         )
 
+    /**
+     * The files the open event's tickets came out of.
+     *
+     * Driven by the same flow as the tickets, so an import while the event is on screen shows up
+     * in its annex without anything asking.
+     */
+    val eventDocuments: StateFlow<List<DocumentRow>> = _openEvent
+        .flatMapLatest { id ->
+            if (id == null) kotlinx.coroutines.flow.flowOf(emptyList())
+            else repository.documentRowsOf(id)
+        }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5_000),
+            initialValue = emptyList(),
+        )
+
     fun openEvent(eventId: String?) {
         _openEvent.value = eventId
     }
@@ -243,14 +260,12 @@ class WalletViewModel @Inject constructor(
      * Decrypted into memory and rasterised page by page; nothing is written anywhere a viewer
      * application could read. Off the main thread because a long document is a lot of bitmaps.
      */
-    fun openDocument(eventId: String) {
+    fun openDocument(documentId: String) {
         viewModelScope.launch {
             _document.value = com.mateof.passvault.ui.document.DocumentViewState(isLoading = true)
             val pages = withContext(Dispatchers.Default) {
                 runCatching {
-                    val stored = repository.documentsOf(eventId).firstOrNull()
-                        ?: return@runCatching emptyList()
-                    val bytes = repository.documentBytes(stored.id) ?: return@runCatching emptyList()
+                    val bytes = repository.documentBytes(documentId) ?: return@runCatching emptyList()
                     val count = rasterizer.pageCount(bytes)
                     (1..count).map { number ->
                         val page = rasterizer.render(bytes, number, RENDER_WIDTH)

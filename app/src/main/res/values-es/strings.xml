@@ -138,4 +138,9 @@
     <string name="event_mark_title">Icono del evento</string>
     <string name="event_mark_icon">Icono</string>
     <string name="event_mark_colour">Color</string>
+    <string name="document_annex_title">Archivo original</string>
+    <plurals name="document_page_count">
+        <item quantity="one">%1$d página</item>
+        <item quantity="other">%1$d páginas</item>
+    </plurals>
 </resources>

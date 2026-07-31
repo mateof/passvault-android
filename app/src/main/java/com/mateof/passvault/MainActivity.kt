@@ -146,6 +146,7 @@ private fun PassVaultApp(
     val documentState by viewModel.document.collectAsStateWithLifecycle()
     val eventsState by viewModel.events.collectAsStateWithLifecycle()
     val eventTickets by viewModel.eventTickets.collectAsStateWithLifecycle()
+    val eventDocuments by viewModel.eventDocuments.collectAsStateWithLifecycle()
     var excluded by remember { mutableStateOf(emptySet<Int>()) }
     val snackbars = remember { SnackbarHostState() }
     val context = LocalContext.current
@@ -154,13 +155,12 @@ private fun PassVaultApp(
     // user expects of a detail screen and what they do not get for free.
     // Back from a ticket returns to its event, not to the wallet: that is where the user came
     // from, and jumping two levels loses their place in a list of forty.
-    BackHandler(enabled = screen is Screen.Ticket) {
+    BackHandler(enabled = screen is Screen.Ticket || screen is Screen.Document) {
         val event = openEvent
         screen = if (event != null) Screen.Event(event.first, event.second) else Screen.Wallet
     }
     BackHandler(
         enabled = screen is Screen.Event ||
-            screen is Screen.Document ||
             screen is Screen.Server ||
             screen is Screen.Updates,
     ) {
@@ -353,9 +353,14 @@ private fun PassVaultApp(
                         icon = row?.icon,
                         colour = row?.colour,
                         tickets = eventTickets,
+                        documents = eventDocuments,
                         onBack = { viewModel.openEvent(null); screen = Screen.Wallet },
                         onTicketClick = { ticketId ->
                             viewModel.openTicket(ticketId) { detail -> screen = Screen.Ticket(detail) }
+                        },
+                        onOpenDocument = { documentId ->
+                            viewModel.openDocument(documentId)
+                            screen = Screen.Document(current.id)
                         },
                         onMarkChosen = { chosenIcon, chosenColour ->
                             viewModel.setEventMark(current.id, chosenIcon, chosenColour)
@@ -366,15 +371,23 @@ private fun PassVaultApp(
                     detail = current.detail,
                     onBack = { screen = Screen.Wallet },
                     onOpenDocument = {
-                        viewModel.openDocument(current.detail.eventId)
-                        screen = Screen.Document(current.detail.eventId)
+                        eventDocuments.firstOrNull()?.let { document ->
+                            viewModel.openDocument(document.id)
+                            screen = Screen.Document(current.detail.eventId)
+                        }
                     },
                 )
                 Screen.Server -> ServerPane(onBack = { screen = Screen.Wallet })
                 Screen.Updates -> UpdatePane(onBack = { screen = Screen.Wallet })
                 is Screen.Document -> DocumentPane(
                     state = documentState,
-                    onBack = { screen = Screen.Wallet },
+                    // Back to the event, not to the wallet. The annex is reached from inside an
+                    // event now, and dropping somebody two levels loses their place in a list.
+                    onBack = {
+                        val event = openEvent
+                        screen = if (event != null) Screen.Event(event.first, event.second)
+                        else Screen.Wallet
+                    },
                 )
                 Screen.Share -> SharePane(onBack = { screen = Screen.Wallet })
             }
@@ -510,8 +523,10 @@ private fun EventPane(
     icon: String?,
     colour: String?,
     tickets: List<com.mateof.passvault.ui.wallet.TicketRow>,
+    documents: List<com.mateof.passvault.ui.wallet.DocumentRow>,
     onBack: () -> Unit,
     onTicketClick: (String) -> Unit,
+    onOpenDocument: (String) -> Unit,
     onMarkChosen: (String, String) -> Unit,
 ) {
     var picking by remember { mutableStateOf(false) }
@@ -567,6 +582,8 @@ private fun EventPane(
             state = WalletUiState(tickets = tickets),
             onTicketClick = onTicketClick,
             modifier = Modifier.padding(padding),
+            documents = documents,
+            onOpenDocument = onOpenDocument,
         )
     }
 }
