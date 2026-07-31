@@ -71,6 +71,7 @@
     <string name="document_unreadable">Non se puido abrir o documento gardado.</string>
     <string name="document_page">Páxina %1$d</string>
     <string name="ticket_position">%1$d de %2$d</string>
+    <string name="document_page_position">Páxina %1$d de %2$d</string>
     <string name="action_open_document">Ver o documento orixinal</string>
     <string name="server_title">Conectar cun servidor</string>
     <string name="server_optional">Non fai falta ningún. A carteira, a ingesta, os ficheiros .tkpak e pasar entradas a outro móbil na mesma wifi funcionan sen servidor. Un servidor engade un sitio onde o rexistro se atopa con dispositivos que non están na sala, e unha autoridade que pode resolver un reclamo disputado.</string>
@@ -98,6 +99,10 @@
     <plurals name="server_sync_published">
         <item quantity="one">Subiuse %1$d evento deste móbil ao servidor.</item>
         <item quantity="other">Subíronse %1$d eventos deste móbil ao servidor.</item>
+    </plurals>
+    <plurals name="server_sync_documents">
+        <item quantity="one">Sincronizouse %1$d documento orixinal.</item>
+        <item quantity="other">Sincronizáronse %1$d documentos orixinais.</item>
     </plurals>
     <string name="events_title">Os teus eventos</string>
     <plurals name="event_ticket_count">

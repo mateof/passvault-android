@@ -221,6 +221,86 @@ class ServerApi(private val settings: ServerSettings) {
         )
     }
 
+    // --- Documents ----------------------------------------------------------------------
+
+    /**
+     * The original files the server holds for an event.
+     *
+     * The signed log carries what happened to an event; the PDF it all came out of is not one of
+     * those things, so it needs a channel of its own. Without it a wallet built on a phone
+     * synchronised its tickets and left the file behind — and the pages ingestion drops on
+     * purpose, the map and the terms and the gate instructions, existed on one device only.
+     */
+    fun documents(eventId: String): List<RemoteDocument> =
+        (call("/api/v1/events/$eventId/documents")["documents"] as? JsonArray).orEmpty()
+            .map { it.jsonObject }
+            .mapNotNull { document ->
+                val id = document.text("id") ?: return@mapNotNull null
+                RemoteDocument(
+                    id = id,
+                    mediaType = document.text("mediaType") ?: "application/octet-stream",
+                    pageCount = document["pageCount"]?.jsonPrimitive?.content?.toIntOrNull() ?: 0,
+                )
+            }
+
+    /**
+     * Sends one, under the identifier this phone already uses for it.
+     *
+     * A PUT because the client names the resource: saying it twice says the same thing, so a
+     * synchronisation that runs every day uploads the file once rather than accumulating a copy
+     * per run. The server answers 200 rather than 201 when it already had it.
+     */
+    fun uploadDocument(
+        eventId: String,
+        documentId: String,
+        mediaType: String,
+        pageCount: Int,
+        bytes: ByteArray,
+    ): Boolean {
+        val request = Request.Builder()
+            .url(url("/api/v1/events/$eventId/documents/$documentId?pages=$pageCount"))
+            .apply {
+                token?.let { header("Authorization", "Bearer $it") }
+                header("Accept-Language", settings.locale())
+                put(bytes.toRequestBody(mediaType.toMediaType()))
+            }
+            .build()
+        client.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) {
+                val parsed = runCatching {
+                    Json.parseToJsonElement(response.body?.string().orEmpty()).jsonObject
+                }.getOrNull()
+                throw ServerException(
+                    status = response.code,
+                    message = parsed?.text("message") ?: "HTTP ${response.code}",
+                    code = parsed?.text("code"),
+                )
+            }
+            // 201 means it was stored now; 200 means it was already there. Only the first is
+            // worth counting, or a summary reports uploads that never happened.
+            return response.code == 201
+        }
+    }
+
+    /** Fetches one whole. Null when the server no longer has it, which is not a broken wallet. */
+    fun downloadDocument(eventId: String, documentId: String): ByteArray? {
+        val request = Request.Builder()
+            .url(url("/api/v1/events/$eventId/documents/$documentId"))
+            .apply {
+                token?.let { header("Authorization", "Bearer $it") }
+                header("Accept-Language", settings.locale())
+                get()
+            }
+            .build()
+        client.newCall(request).execute().use { response ->
+            if (response.code == 404) return null
+            if (!response.isSuccessful) {
+                throw ServerException(response.code, "HTTP ${response.code}", null)
+            }
+            return response.body?.bytes()
+        }
+    }
+
     // --- Groups and sharing -------------------------------------------------------------
 
     fun groups(): List<Group> =
@@ -323,6 +403,9 @@ data class Group(val id: String, val name: String, val role: String, val memberC
 
 /** What an authenticator needs, in the two forms one might be given it. */
 data class TotpEnrolment(val secret: String, val uri: String)
+
+/** A document the server holds, as its listing describes it. The bytes are fetched separately. */
+data class RemoteDocument(val id: String, val mediaType: String, val pageCount: Int)
 
 data class Account(val userId: String, val isAdmin: Boolean, val vaultUnlocked: Boolean)
 

@@ -413,6 +413,35 @@ class WalletRepository(
     /** The decrypted bytes of one document, for rendering. Null if the file is gone. */
     suspend fun documentBytes(documentId: String): ByteArray? = documentStore.read(documentId)
 
+    /**
+     * Keeps a document that arrived from somewhere else.
+     *
+     * Under the identifier it already has, so the two sides agree on which file this is and a
+     * second synchronisation does not produce a second copy of the same PDF. Encrypted on the way
+     * in like every other document: a file from a server is no more readable at rest than one this
+     * phone split itself.
+     */
+    suspend fun keepDocument(
+        id: String,
+        eventId: String,
+        mediaType: String,
+        pageCount: Int,
+        bytes: ByteArray,
+        now: String = Ids.toInstant(),
+    ) {
+        documentStore.write(id, bytes)
+        documents.upsert(
+            DocumentEntity(
+                id = id,
+                eventId = eventId,
+                mediaType = mediaType,
+                pageCount = pageCount,
+                byteCount = bytes.size,
+                createdAt = now,
+            ),
+        )
+    }
+
     /** Projects every event the log knows about. What a device does after a transfer. */
     suspend fun projectAll() {
         for (eventId in log.eventIds()) {

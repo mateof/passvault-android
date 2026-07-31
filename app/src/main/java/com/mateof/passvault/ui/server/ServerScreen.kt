@@ -366,6 +366,16 @@ private fun ReadyStep(
                 color = MaterialTheme.colorScheme.secondary,
             )
         }
+        val documents = summary.documentsSent + summary.documentsReceived
+        if (documents > 0) {
+            // Also its own line. The original PDF travels beside the log rather than inside it,
+            // and "sent 12 operations" is not an answer to "where is my file".
+            Text(
+                text = pluralStringResource(R.plurals.server_sync_documents, documents, documents),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.secondary,
+            )
+        }
     }
 
     TextButton(onClick = onForget) { Text(stringResource(R.string.server_forget)) }

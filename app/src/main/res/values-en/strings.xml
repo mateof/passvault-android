@@ -65,6 +65,7 @@
     <string name="document_unreadable">The stored document could not be opened.</string>
     <string name="document_page">Page %1$d</string>
     <string name="ticket_position">%1$d of %2$d</string>
+    <string name="document_page_position">Page %1$d of %2$d</string>
     <string name="action_open_document">View the original document</string>
     <string name="server_title">Connect to a server</string>
     <string name="server_optional">You do not need one. The wallet, ingestion, .tkpak files and passing tickets to another phone on the same Wi-Fi all work with no server. A server adds a place for the log to meet devices that are not in the room, and an authority that can settle a contested claim.</string>
@@ -92,6 +93,10 @@
     <plurals name="server_sync_published">
         <item quantity="one">Uploaded %1$d event from this phone to the server.</item>
         <item quantity="other">Uploaded %1$d events from this phone to the server.</item>
+    </plurals>
+    <plurals name="server_sync_documents">
+        <item quantity="one">Synchronised %1$d original document.</item>
+        <item quantity="other">Synchronised %1$d original documents.</item>
     </plurals>
     <string name="events_title">Your events</string>
     <plurals name="event_ticket_count">

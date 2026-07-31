@@ -187,6 +187,9 @@ class ServerViewModel @Inject constructor(
                     // asked for, so it never arrives, and the screen says "received 0" as though
                     // that were the truth. Joining a server is mostly about the events already
                     // there.
+                    var documentsUp = 0
+                    var documentsDown = 0
+
                     for (eventId in remote + local) {
                         val mine = if (eventId in local) {
                             log.since(eventId, cursor = "", limit = 500).operations
@@ -198,9 +201,21 @@ class ServerViewModel @Inject constructor(
                         if (result.created) published += 1
                         applied += log.accept(result.received)
                             .count { it.state == AcceptState.APPLIED }
+
+                        // After the operations, because the event has to exist on both sides
+                        // before a file can be attached to it.
+                        val exchanged = exchangeDocuments(eventId)
+                        documentsUp += exchanged.first
+                        documentsDown += exchanged.second
                     }
                     wallet.projectAll()
-                    SyncSummary(sent = sent, received = applied, published = published)
+                    SyncSummary(
+                        sent = sent,
+                        received = applied,
+                        published = published,
+                        documentsSent = documentsUp,
+                        documentsReceived = documentsDown,
+                    )
                 }
             }
             _state.value = outcome.fold(
@@ -208,6 +223,74 @@ class ServerViewModel @Inject constructor(
                 onFailure = { _state.value.copy(busy = false, failure = describe(it)) },
             )
         }
+    }
+
+    /**
+     * The original files, in both directions. Returns what went up and what came down.
+     *
+     * The log carries operations, and a PDF is not one: it is not something that happened to an
+     * event, it is what the event was made from. So it travels beside the log rather than inside
+     * it, and it travels by identifier — each side asks what the other has and sends only what is
+     * missing. That is what makes running this on every synchronisation cheap, and what stops a
+     * daily upload from leaving a copy of the same file per day.
+     *
+     * Both directions, because both gaps are real: a wallet built on a phone has a file the server
+     * has never seen, and an event imported through the web has one this phone has never seen.
+     */
+    private suspend fun exchangeDocuments(eventId: String): Pair<Int, Int> {
+        val here = wallet.documentsOf(eventId)
+        val there = try {
+            api.documents(eventId)
+        } catch (failure: ServerException) {
+            // An event this server does not hold, or will not open for this account. Neither is a
+            // failed synchronisation: the operations for it were exchanged or refused on their own
+            // terms and there is no document conversation to have. Anything else — a file too
+            // large, a server in trouble — is left to fail loudly, because a document that
+            // silently never arrives is the very thing this exists to stop.
+            if (failure.status == 404 || failure.status == 403) return 0 to 0
+            throw failure
+        }
+        val theirIds = there.map { it.id }.toSet()
+        var up = 0
+        var down = 0
+
+        for (document in here.filter { it.id !in theirIds }) {
+            val bytes = wallet.documentBytes(document.id)
+                // A row with no file behind it. Nothing to send, and nothing worth failing over:
+                // the wallet is not broken by a document it can no longer open.
+                ?: continue
+            val stored = try {
+                api.uploadDocument(
+                    eventId = eventId,
+                    documentId = document.id,
+                    mediaType = document.mediaType,
+                    pageCount = document.pageCount,
+                    bytes = bytes,
+                )
+            } catch (failure: ServerException) {
+                // Only whoever created the event says what its original file is. A phone that was
+                // given tickets holds a copy of the document and is not entitled to publish it,
+                // which is a rule rather than a fault.
+                if (failure.status == 403) continue
+                throw failure
+            }
+            if (stored) up += 1
+        }
+
+        val hereIds = here.map { it.id }.toSet()
+        for (document in there.filter { it.id !in hereIds }) {
+            val bytes = api.downloadDocument(eventId, document.id) ?: continue
+            wallet.keepDocument(
+                id = document.id,
+                eventId = eventId,
+                mediaType = document.mediaType,
+                pageCount = document.pageCount,
+                bytes = bytes,
+            )
+            down += 1
+        }
+
+        return up to down
     }
 
     /**
@@ -389,6 +472,10 @@ data class SyncSummary(
     val received: Int,
     /** Events this synchronisation created on the server, having existed only on this phone. */
     val published: Int,
+    /** Original files uploaded, which the operation log has no way of carrying. */
+    val documentsSent: Int = 0,
+    /** And ones fetched, for an event imported somewhere else. */
+    val documentsReceived: Int = 0,
 )
 
 data class ServerUiState(
