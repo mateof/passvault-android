@@ -68,6 +68,42 @@ class WalletRepository(
             }
         }
 
+    /**
+     * The events the wallet lists.
+     *
+     * Decrypted here rather than in a composable, like the ticket list: a screen that decrypts
+     * during composition drops frames on exactly the scroll where the user notices.
+     */
+    fun events(): Flow<List<com.mateof.passvault.ui.wallet.EventRow>> =
+        dao.events().map { rows ->
+            rows.map { row ->
+                com.mateof.passvault.ui.wallet.EventRow(
+                    id = row.id,
+                    name = decrypt(row.nameCipher, "events", "name_cipher", row.id) ?: "",
+                    venue = decrypt(row.venueCipher, "events", "venue_cipher", row.id),
+                    startsAt = row.startsAt?.take(10),
+                    ticketCount = row.ticketCount,
+                    provisionalCount = row.provisionalCount,
+                )
+            }
+        }
+
+    /** The tickets of one event, decrypted the same way as the wallet list. */
+    fun ticketsOf(eventId: String, locale: Locale = Locale.getDefault()): Flow<List<TicketRow>> =
+        dao.ticketsOf(eventId).map { rows ->
+            rows.map { row ->
+                TicketRow(
+                    id = row.id,
+                    eventName = decrypt(row.eventNameCipher, "events", "name_cipher", row.eventId)
+                        ?: "",
+                    label = decrypt(row.labelCipher, "tickets", "label_cipher", row.id) ?: "",
+                    seat = decrypt(row.seatCipher, "tickets", "seat_cipher", row.id),
+                    state = stateOf(row.assignmentState),
+                    paymentLabel = paymentLabel(row, locale),
+                )
+            }
+        }
+
     private fun stateOf(stored: String): TicketState = when (stored) {
         "PROVISIONAL" -> TicketState.Provisional
         "CLAIMED", "ASSIGNED" -> TicketState.Held

@@ -76,6 +76,16 @@ data class TicketWithEvent(
     @ColumnInfo(name = "starts_at") val startsAt: String?,
 )
 
+/** An event as the list shows it: a name, a date and how many tickets are inside. */
+data class EventWithCount(
+    @ColumnInfo(name = "id") val id: String,
+    @ColumnInfo(name = "name_cipher") val nameCipher: ByteArray,
+    @ColumnInfo(name = "venue_cipher") val venueCipher: ByteArray?,
+    @ColumnInfo(name = "starts_at") val startsAt: String?,
+    @ColumnInfo(name = "ticket_count") val ticketCount: Int,
+    @ColumnInfo(name = "provisional_count") val provisionalCount: Int,
+)
+
 @Dao
 interface WalletDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
@@ -115,6 +125,36 @@ interface WalletDao {
 
     @Query("SELECT COUNT(*) FROM tickets")
     suspend fun ticketCount(): Int
+
+    /**
+     * The events, with how many tickets each holds.
+     *
+     * One query with a join rather than a list of events and a count per event, because the wallet
+     * screen would otherwise issue one query per row and the number of rows is the number of
+     * events somebody is going to.
+     *
+     * Ordered by when the event starts, undated last: a ticket for tonight matters more than one
+     * with no date, and SQLite sorts NULL first, which would put every undated event at the top.
+     */
+    @Query(
+        "SELECT e.id, e.name_cipher, e.venue_cipher, e.starts_at, " +
+            "COUNT(t.id) AS ticket_count, " +
+            "SUM(CASE WHEN t.assignment_state = 'PROVISIONAL' THEN 1 ELSE 0 END) AS provisional_count " +
+            "FROM events e LEFT JOIN tickets t ON t.event_id = e.id " +
+            "GROUP BY e.id " +
+            "ORDER BY CASE WHEN e.starts_at IS NULL THEN 1 ELSE 0 END, e.starts_at ASC, e.created_at DESC",
+    )
+    fun events(): Flow<List<EventWithCount>>
+
+    /** The tickets of one event. */
+    @Query(
+        "SELECT t.id, t.label_cipher, t.seat_cipher, t.assignment_state, t.payment_state, " +
+            "t.amount_cents, t.currency, t.holder_label_cipher, " +
+            "e.id AS event_id, e.name_cipher, e.starts_at " +
+            "FROM tickets t JOIN events e ON e.id = t.event_id " +
+            "WHERE t.event_id = :eventId ORDER BY t.created_at ASC",
+    )
+    fun ticketsOf(eventId: String): Flow<List<TicketWithEvent>>
 
     @Query("DELETE FROM tickets WHERE id = :ticketId")
     suspend fun deleteTicket(ticketId: String)

@@ -15,11 +15,13 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
+@kotlin.OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 @HiltViewModel
 class WalletViewModel @Inject constructor(
     private val repository: WalletRepository,
@@ -130,6 +132,36 @@ class WalletViewModel @Inject constructor(
         started = SharingStarted.WhileSubscribed(5_000),
         initialValue = WalletUiState(isLoading = true),
     )
+
+    /** The events the wallet lists. */
+    val events: StateFlow<com.mateof.passvault.ui.wallet.EventsUiState> =
+        repository.events()
+            .map { com.mateof.passvault.ui.wallet.EventsUiState(events = it, isLoading = false) }
+            .stateIn(
+                scope = viewModelScope,
+                started = SharingStarted.WhileSubscribed(5_000),
+                initialValue = com.mateof.passvault.ui.wallet.EventsUiState(isLoading = true),
+            )
+
+    private val _openEvent = MutableStateFlow<String?>(null)
+
+    /**
+     * The tickets of whichever event is open.
+     *
+     * Driven by a flow of the chosen id rather than by loading a list when the screen opens, so a
+     * claim confirmed while the screen is up updates it without anything asking.
+     */
+    val eventTickets: StateFlow<List<TicketRow>> = _openEvent
+        .flatMapLatest { id -> if (id == null) kotlinx.coroutines.flow.flowOf(emptyList()) else repository.ticketsOf(id) }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5_000),
+            initialValue = emptyList(),
+        )
+
+    fun openEvent(eventId: String?) {
+        _openEvent.value = eventId
+    }
 
     private val _events = MutableStateFlow<ImportOutcome?>(null)
     val importOutcome: StateFlow<ImportOutcome?> = _events.asStateFlow()

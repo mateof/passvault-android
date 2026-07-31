@@ -92,4 +92,13 @@
         <item quantity="one">%1$d event is only on this phone and was not synced.</item>
         <item quantity="other">%1$d events are only on this phone and were not synced.</item>
     </plurals>
+    <string name="events_title">Your events</string>
+    <plurals name="event_ticket_count">
+        <item quantity="one">%1$d ticket</item>
+        <item quantity="other">%1$d tickets</item>
+    </plurals>
+    <plurals name="event_provisional_count">
+        <item quantity="one">%1$d awaiting confirmation</item>
+        <item quantity="other">%1$d awaiting confirmation</item>
+    </plurals>
 </resources>

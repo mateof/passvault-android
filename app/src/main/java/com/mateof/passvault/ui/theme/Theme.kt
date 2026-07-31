@@ -106,7 +106,13 @@ val LocalStatusColours = androidx.compose.runtime.staticCompositionLocalOf { Sta
 
 private val PassVaultTypography = Typography().run {
     copy(
-        headlineMedium = headlineMedium.copy(fontWeight = FontWeight.SemiBold),
+        // Tighter and heavier at the top of the scale. A screen title that is merely larger than
+        // the body reads as a paragraph; one that is also tighter reads as a heading, which is
+        // what lets somebody find their event without reading the list.
+        displaySmall = displaySmall.copy(fontWeight = FontWeight.Bold, letterSpacing = (-0.5).sp),
+        headlineLarge = headlineLarge.copy(fontWeight = FontWeight.Bold, letterSpacing = (-0.4).sp),
+        headlineMedium = headlineMedium.copy(fontWeight = FontWeight.SemiBold, letterSpacing = (-0.2).sp),
+        titleLarge = titleLarge.copy(fontWeight = FontWeight.SemiBold, letterSpacing = 0.sp),
         titleMedium = titleMedium.copy(fontWeight = FontWeight.SemiBold, letterSpacing = 0.sp),
         // Barcode payloads and seat numbers are read by a person comparing them against a screen at
         // a gate, so they get a tabular, roomier treatment wherever they appear.
@@ -131,6 +137,7 @@ fun PassVaultTheme(
     MaterialTheme(
         colorScheme = scheme,
         typography = PassVaultTypography,
+        shapes = PassVaultShapes,
         content = content,
     )
 }

@@ -108,6 +108,7 @@ private val IMPORTABLE_TYPES = arrayOf(
 
 private sealed interface Screen {
     data object Wallet : Screen
+    data class Event(val id: String, val name: String) : Screen
     data class Ticket(val detail: TicketDetail) : Screen
     data object Share : Screen
     data class Document(val eventId: String) : Screen
@@ -125,18 +126,29 @@ private fun PassVaultApp(
     val outcome by viewModel.importOutcome.collectAsStateWithLifecycle()
 
     var screen by remember { mutableStateOf<Screen>(Screen.Wallet) }
+    // Remembered so a ticket knows which event to go back to.
+    var openEvent by remember { mutableStateOf<Pair<String, String>?>(null) }
     val proposal by viewModel.pendingProposal.collectAsStateWithLifecycle()
     val pendingArchive by viewModel.pendingArchive.collectAsStateWithLifecycle()
     val documentState by viewModel.document.collectAsStateWithLifecycle()
+    val eventsState by viewModel.events.collectAsStateWithLifecycle()
+    val eventTickets by viewModel.eventTickets.collectAsStateWithLifecycle()
     var excluded by remember { mutableStateOf(emptySet<Int>()) }
     val snackbars = remember { SnackbarHostState() }
     val context = LocalContext.current
 
     // The system back gesture returns to the wallet rather than leaving the app, which is what a
     // user expects of a detail screen and what they do not get for free.
+    // Back from a ticket returns to its event, not to the wallet: that is where the user came
+    // from, and jumping two levels loses their place in a list of forty.
+    BackHandler(enabled = screen is Screen.Ticket) {
+        val event = openEvent
+        screen = if (event != null) Screen.Event(event.first, event.second) else Screen.Wallet
+    }
     BackHandler(
-        enabled = screen is Screen.Ticket || screen is Screen.Document || screen is Screen.Server,
+        enabled = screen is Screen.Event || screen is Screen.Document || screen is Screen.Server,
     ) {
+        viewModel.openEvent(null)
         screen = Screen.Wallet
     }
     BackHandler(enabled = proposal != null) { viewModel.discardProposal() }
@@ -279,15 +291,27 @@ private fun PassVaultApp(
                         },
                     )
                 } ?: WalletPane(
-                    state = state,
-                    onTicketClick = { ticketId ->
-                        viewModel.openTicket(ticketId) { detail -> screen = Screen.Ticket(detail) }
+                    state = eventsState,
+                    onEventClick = { id, name ->
+                        viewModel.openEvent(id)
+                        screen = Screen.Event(id, name)
                     },
                     onShare = { screen = Screen.Share },
                     onImport = { pickFile.launch(IMPORTABLE_TYPES) },
                     onCapture = { startCapture() },
                     onServer = { screen = Screen.Server },
                 )
+                is Screen.Event -> {
+                    openEvent = current.id to current.name
+                    EventPane(
+                    title = current.name,
+                    tickets = eventTickets,
+                    onBack = { viewModel.openEvent(null); screen = Screen.Wallet },
+                    onTicketClick = { ticketId ->
+                        viewModel.openTicket(ticketId) { detail -> screen = Screen.Ticket(detail) }
+                    },
+                    )
+                }
                 is Screen.Ticket -> TicketPane(
                     detail = current.detail,
                     onBack = { screen = Screen.Wallet },
@@ -320,8 +344,8 @@ private fun PassVaultApp(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun WalletPane(
-    state: WalletUiState,
-    onTicketClick: (String) -> Unit,
+    state: com.mateof.passvault.ui.wallet.EventsUiState,
+    onEventClick: (String, String) -> Unit,
     onShare: () -> Unit,
     onImport: () -> Unit,
     onCapture: () -> Unit,
@@ -336,7 +360,7 @@ private fun WalletPane(
         modifier = modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
             MediumTopAppBar(
-                title = { Text(stringResource(R.string.wallet_title)) },
+                title = { Text(stringResource(R.string.events_title)) },
                 actions = {
                     IconButton(onClick = onImport) {
                         Icon(
@@ -367,7 +391,42 @@ private fun WalletPane(
             )
         },
     ) { padding ->
-        WalletScreen(state = state, onTicketClick = onTicketClick, modifier = Modifier.padding(padding))
+        com.mateof.passvault.ui.wallet.EventsScreen(
+            state = state,
+            onEventClick = { id ->
+                onEventClick(id, state.events.firstOrNull { it.id == id }?.name.orEmpty())
+            },
+            modifier = Modifier.padding(padding),
+        )
+    }
+}
+
+/** One event, with its tickets. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun EventPane(
+    title: String,
+    tickets: List<com.mateof.passvault.ui.wallet.TicketRow>,
+    onBack: () -> Unit,
+    onTicketClick: (String) -> Unit,
+) {
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text(title) },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
+                    }
+                },
+            )
+        },
+    ) { padding ->
+        WalletScreen(
+            state = WalletUiState(tickets = tickets),
+            onTicketClick = onTicketClick,
+            modifier = Modifier.padding(padding),
+        )
     }
 }
 
