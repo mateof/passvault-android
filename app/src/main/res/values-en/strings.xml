@@ -143,4 +143,30 @@
         <item quantity="one">%1$d page</item>
         <item quantity="other">%1$d pages</item>
     </plurals>
+    <string name="share_scope_everything">Your whole wallet is about to be shared</string>
+    <string name="share_scope_event">“%1$s” is about to be shared, all of it</string>
+    <plurals name="share_scope_tickets">
+        <item quantity="one">%1$d ticket from “%2$s” is about to be shared</item>
+        <item quantity="other">%1$d tickets from “%2$s” are about to be shared</item>
+    </plurals>
+    <string name="share_partial_warning">Whoever receives it sees only the tickets you send, not the rest of the event.</string>
+    <string name="action_select">Choose tickets</string>
+    <plurals name="tickets_selected">
+        <item quantity="one">%1$d chosen</item>
+        <item quantity="other">%1$d chosen</item>
+    </plurals>
+    <string name="share_nfc_service">Share tickets by holding the phones together</string>
+    <string name="share_tap_hint">Hold the two phones back to back to pair without comparing a code.</string>
+    <string name="share_tap_paired">Paired by touch. There is no code to compare.</string>
+    <string name="share_tap_unavailable">This phone has no NFC, so the six digits are compared instead.</string>
+    <string name="export_title">Save to a file</string>
+    <string name="export_no_revocation">Once somebody imports this file they hold the ticket barcode. It cannot be taken back afterwards.</string>
+    <string name="export_password">File password</string>
+    <string name="export_password_help">Needed to open it. Give it to the other person some other way, not in the same chat.</string>
+    <plurals name="export_confirm">
+        <item quantity="one">Save %1$d ticket</item>
+        <item quantity="other">Save %1$d tickets</item>
+    </plurals>
+    <string name="export_failed">The file could not be created.</string>
+    <string name="action_export">Save to a file</string>
 </resources>

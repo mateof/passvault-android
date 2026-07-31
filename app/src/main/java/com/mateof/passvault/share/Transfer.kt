@@ -55,8 +55,23 @@ object Transfer {
         signingPublicKey: ByteArray,
         displayName: String,
         isInitiator: Boolean,
+        /**
+         * The keys to greet with, when they were already published over NFC.
+         *
+         * The advertiser has to greet with the very pair whose public half it put on the tag, or
+         * the receiver's check against it fails and an honest tap looks like an attack.
+         */
+        ephemeralKeys: PairingKeys? = null,
+        /**
+         * What the tap said the peer's key would be.
+         *
+         * Present only on the side that read a tag. A key on the socket that is not this one is a
+         * device that never touched this phone, which is exactly what the six digits were there to
+         * catch — so it is refused here instead of being shown to a human to compare.
+         */
+        expectedPeerKey: ByteArray? = null,
     ): PairedPeer {
-        val ephemeral = LocalPairing.generateKeys()
+        val ephemeral = ephemeralKeys ?: LocalPairing.generateKeys()
 
         val greeting = buildJsonObject {
             put("kind", HELLO)
@@ -84,6 +99,15 @@ object Transfer {
         }
 
         val peerEphemeral = peerGreeting.key("ephemeralPublicKey")
+        if (expectedPeerKey != null && !expectedPeerKey.contentEquals(peerEphemeral)) {
+            // Reported as an interposed device rather than as a protocol error, because that is
+            // what it is: the phone that was touched announced one key and the socket presented
+            // another.
+            throw TransferException(
+                TransferError.DIGITS_MISMATCH,
+                "the phone on the socket is not the phone that was touched",
+            )
+        }
         val result = LocalPairing.complete(ephemeral, peerEphemeral, isInitiator)
 
         return PairedPeer(
@@ -97,14 +121,51 @@ object Transfer {
     }
 
     /**
-     * Says the digits matched, and checks the other side says so too.
+     * Says the check passed, and makes sure the other side says so too.
      *
-     * A frame that fails to authenticate here is the interposed device, not a network glitch, and is
-     * reported as [TransferError.DIGITS_MISMATCH] rather than as a generic failure — the user needs
-     * to be told they were attacked, not that something went wrong.
+     * Sent *through* the encrypted session rather than in the open, which is what turns it from a
+     * ritual into a check: a device sitting in the middle holds a working session with each side
+     * but two different keys, so its relayed confirmation fails to authenticate and the receiving
+     * side learns it is being attacked — even if a careless user waved six digits through.
+     *
+     * The check itself is one of two things. Without NFC it is the digits, compared by two people.
+     * With it, the tapping side returns the token it read off the other phone's tag, which proves
+     * physical contact — something no attacker on the network can fake.
+     *
+     * A frame that fails to authenticate here is the interposed device, not a network glitch, and
+     * is reported as [TransferError.DIGITS_MISMATCH] rather than as a generic failure: the user
+     * needs to be told they were attacked, not that something went wrong.
      */
-    fun confirm(peer: PairedPeer) {
-        peer.session.send(buildJsonObject { put("kind", CONFIRM) }.toString().toByteArray(Charsets.UTF_8))
+    fun confirm(
+        peer: PairedPeer,
+        isInitiator: Boolean,
+        /** Returned to prove this phone is the one that touched the other. Tapping side only. */
+        token: ByteArray? = null,
+        /** Demanded of the peer before anything moves. Advertising side only. */
+        expected: ByteArray? = null,
+    ) {
+        // Strictly ordered, and that is the security property rather than a style choice. The side
+        // holding the token must not reveal it until the other has proved it already knows it —
+        // otherwise a device that dialled in without ever touching this phone would be handed the
+        // very secret that was supposed to distinguish it, and could hand it straight back.
+        if (isInitiator) {
+            send(peer, token)
+            expectConfirmation(peer, expected = null)
+        } else {
+            expectConfirmation(peer, expected)
+            send(peer, null)
+        }
+    }
+
+    private fun send(peer: PairedPeer, token: ByteArray?) {
+        val message = buildJsonObject {
+            put("kind", CONFIRM)
+            if (token != null) put("token", Base64Url.encode(token))
+        }
+        peer.session.send(message.toString().toByteArray(Charsets.UTF_8))
+    }
+
+    private fun expectConfirmation(peer: PairedPeer, expected: ByteArray?) {
         val reply = try {
             parse(peer.session.receive())
         } catch (cause: TransferException) {
@@ -119,6 +180,22 @@ object Transfer {
         }
         if (reply.string("kind") != CONFIRM) {
             throw TransferException(TransferError.PROTOCOL, "expected a confirmation")
+        }
+        if (expected == null) {
+            return
+        }
+        val returned = runCatching { Base64Url.decodeExact(reply.string("token")!!, 32) }
+            .getOrElse {
+                throw TransferException(
+                    TransferError.DIGITS_MISMATCH,
+                    "the peer returned no tap token, so it never touched this phone",
+                )
+            }
+        if (!returned.contentEquals(expected)) {
+            throw TransferException(
+                TransferError.DIGITS_MISMATCH,
+                "the peer returned a different tap token",
+            )
         }
     }
 

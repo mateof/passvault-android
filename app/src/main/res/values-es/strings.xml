@@ -143,4 +143,30 @@
         <item quantity="one">%1$d página</item>
         <item quantity="other">%1$d páginas</item>
     </plurals>
+    <string name="share_scope_everything">Se va a compartir toda tu cartera</string>
+    <string name="share_scope_event">Se va a compartir «%1$s», entero</string>
+    <plurals name="share_scope_tickets">
+        <item quantity="one">Se va a compartir %1$d entrada de «%2$s»</item>
+        <item quantity="other">Se van a compartir %1$d entradas de «%2$s»</item>
+    </plurals>
+    <string name="share_partial_warning">Quien lo reciba verá solo las entradas que le mandes, no las demás del evento.</string>
+    <string name="action_select">Elegir entradas</string>
+    <plurals name="tickets_selected">
+        <item quantity="one">%1$d elegida</item>
+        <item quantity="other">%1$d elegidas</item>
+    </plurals>
+    <string name="share_nfc_service">Compartir entradas acercando los móviles</string>
+    <string name="share_tap_hint">Acerca los dos móviles por la parte de atrás para emparejar sin comparar códigos.</string>
+    <string name="share_tap_paired">Emparejado al tocar. No hace falta comparar ningún código.</string>
+    <string name="share_tap_unavailable">Este móvil no tiene NFC, así que hay que comparar los seis dígitos.</string>
+    <string name="export_title">Guardar en un archivo</string>
+    <string name="export_no_revocation">Cuando alguien importe este archivo ya tendrá el código de la entrada. No se puede retirar después.</string>
+    <string name="export_password">Contraseña del archivo</string>
+    <string name="export_password_help">Hace falta para abrirlo. Dásela a la otra persona por otra vía, no en el mismo chat.</string>
+    <plurals name="export_confirm">
+        <item quantity="one">Guardar %1$d entrada</item>
+        <item quantity="other">Guardar %1$d entradas</item>
+    </plurals>
+    <string name="export_failed">No se ha podido crear el archivo.</string>
+    <string name="action_export">Guardar en un archivo</string>
 </resources>

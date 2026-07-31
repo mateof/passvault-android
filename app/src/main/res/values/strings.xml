@@ -149,4 +149,30 @@
         <item quantity="one">%1$d páxina</item>
         <item quantity="other">%1$d páxinas</item>
     </plurals>
+    <string name="share_scope_everything">Vaise compartir todo o teu monedeiro</string>
+    <string name="share_scope_event">Vaise compartir «%1$s», enteiro</string>
+    <plurals name="share_scope_tickets">
+        <item quantity="one">Vaise compartir %1$d entrada de «%2$s»</item>
+        <item quantity="other">Vaise compartir %1$d entradas de «%2$s»</item>
+    </plurals>
+    <string name="share_partial_warning">Quen o reciba verá só as entradas que lle mandes, non as demais do evento.</string>
+    <string name="action_select">Escoller entradas</string>
+    <plurals name="tickets_selected">
+        <item quantity="one">%1$d escollida</item>
+        <item quantity="other">%1$d escollidas</item>
+    </plurals>
+    <string name="share_nfc_service">Compartir entradas achegando os móbiles</string>
+    <string name="share_tap_hint">Achega os dous móbiles polo lombo para emparellar sen comparar códigos.</string>
+    <string name="share_tap_paired">Emparellado ao tocar. Non fai falta comparar ningún código.</string>
+    <string name="share_tap_unavailable">Este móbil non ten NFC, así que hai que comparar os seis díxitos.</string>
+    <string name="export_title">Gardar nun ficheiro</string>
+    <string name="export_no_revocation">Cando alguén importe este ficheiro xa terá o código da entrada. Non se pode retirar despois.</string>
+    <string name="export_password">Contrasinal do ficheiro</string>
+    <string name="export_password_help">Fai falta para abrilo. Dállo á outra persoa por outra vía, non no mesmo chat.</string>
+    <plurals name="export_confirm">
+        <item quantity="one">Gardar %1$d entrada</item>
+        <item quantity="other">Gardar %1$d entradas</item>
+    </plurals>
+    <string name="export_failed">Non se puido crear o ficheiro.</string>
+    <string name="action_export">Gardar nun ficheiro</string>
 </resources>

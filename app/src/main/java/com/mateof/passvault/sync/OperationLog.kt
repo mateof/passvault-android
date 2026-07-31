@@ -11,6 +11,7 @@ import com.mateof.passvault.data.OperationReason
 import com.mateof.passvault.data.OperationState
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -288,6 +289,29 @@ class OperationLog(
 
     /** Everything this device holds and would offer a peer. */
     suspend fun allApplied(): List<Operation> = dao.applied().map { it.toOperation() }
+
+    /** Everything this device holds about one event. */
+    suspend fun appliedFor(eventId: String): List<Operation> =
+        dao.appliedFor(eventId).map { it.toOperation() }
+
+    /**
+     * One event, narrowed to some of its tickets.
+     *
+     * An operation is kept when it names no ticket — the event's own creation and renames, which
+     * the receiver needs or the tickets arrive belonging to nothing — or when the ticket it names
+     * is one of the chosen. Everything else is left behind.
+     *
+     * What the receiver gets is deliberately partial, and replay is built for that: an operation
+     * about a ticket nobody sent is a gap rather than an error, and a device that later learns the
+     * rest applies it then. It is also why the screen says how many of how many are going — two
+     * tickets out of twelve looks like a failed transfer to anybody who was not told.
+     */
+    suspend fun appliedFor(eventId: String, ticketIds: Set<String>): List<Operation> =
+        appliedFor(eventId).filter { operation ->
+            val named = (operation.body["ticketId"] as? JsonPrimitive)
+                ?.let { if (it.isString) it.content else null }
+            named == null || named in ticketIds
+        }
 
     suspend fun replay(eventId: String): ReplayResult {
         val devices = dao.devices().associate { it.id to ReplayDevice(it.id) }

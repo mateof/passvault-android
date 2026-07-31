@@ -85,8 +85,8 @@ class TransferTest {
         val wire = Wire()
         val (initiator, responder) = greetBothSides(wire)
 
-        val left = async { Transfer.confirm(initiator) }
-        val right = async { Transfer.confirm(responder) }
+        val left = async { Transfer.confirm(initiator, isInitiator = true) }
+        val right = async { Transfer.confirm(responder, isInitiator = false) }
         left.get(10, TimeUnit.SECONDS)
         right.get(10, TimeUnit.SECONDS)
 
@@ -97,8 +97,8 @@ class TransferTest {
     fun `what one side sends the other reads back`() {
         val wire = Wire()
         val (initiator, responder) = greetBothSides(wire)
-        async { Transfer.confirm(initiator) }
-        async { Transfer.confirm(responder) }.get(10, TimeUnit.SECONDS)
+        async { Transfer.confirm(initiator, isInitiator = true) }
+        async { Transfer.confirm(responder, isInitiator = false) }.get(10, TimeUnit.SECONDS)
 
         val sent = async { initiator.session.send("entradas".toByteArray()) }
         val received = async { responder.session.receive() }
@@ -152,8 +152,8 @@ class TransferTest {
     fun `an altered frame does not authenticate`() {
         val wire = Wire()
         val (initiator, responder) = greetBothSides(wire)
-        async { Transfer.confirm(initiator) }
-        async { Transfer.confirm(responder) }.get(10, TimeUnit.SECONDS)
+        async { Transfer.confirm(initiator, isInitiator = true) }
+        async { Transfer.confirm(responder, isInitiator = false) }.get(10, TimeUnit.SECONDS)
         // A session built on a different key is what a relayed frame looks like from the inside.
         val impostor = TransferSession(wire.responderIn, wire.responderOut, Primitives.randomKey(), false)
 

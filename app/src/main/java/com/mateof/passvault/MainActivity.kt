@@ -19,8 +19,12 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.PhotoCamera
+import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Checklist
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.Save
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DrawerValue
@@ -50,11 +54,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.mateof.passvault.share.ShareScope
 import com.mateof.passvault.ui.Destination
 import com.mateof.passvault.ui.MainDrawerSheet
 import com.mateof.passvault.ui.ingest.IngestReviewScreen
@@ -122,7 +128,7 @@ private sealed interface Screen {
     data object Wallet : Screen
     data class Event(val id: String, val name: String) : Screen
     data class Ticket(val detail: TicketDetail) : Screen
-    data object Share : Screen
+    data class Share(val scope: ShareScope) : Screen
     data class Document(val eventId: String) : Screen
     data object Server : Screen
     data object Updates : Screen
@@ -272,7 +278,7 @@ private fun PassVaultApp(
     val drawer = rememberDrawerState(DrawerValue.Closed)
     val scope = rememberCoroutineScope()
     val destination = when (screen) {
-        Screen.Share -> Destination.Share
+        is Screen.Share -> Destination.Share
         Screen.Server -> Destination.Server
         Screen.Updates -> Destination.Updates
         else -> Destination.Wallet
@@ -283,7 +289,7 @@ private fun PassVaultApp(
         viewModel.openEvent(null)
         screen = when (chosen) {
             Destination.Wallet -> Screen.Wallet
-            Destination.Share -> Screen.Share
+            Destination.Share -> Screen.Share(ShareScope.Everything)
             Destination.Server -> Screen.Server
             Destination.Updates -> Screen.Updates
         }
@@ -339,7 +345,7 @@ private fun PassVaultApp(
                         viewModel.openEvent(id)
                         screen = Screen.Event(id, name)
                     },
-                    onShare = { screen = Screen.Share },
+                    onShare = { screen = Screen.Share(ShareScope.Everything) },
                     onImport = { pickFile.launch(IMPORTABLE_TYPES) },
                     onCapture = { startCapture() },
                     onMenu = openDrawer,
@@ -365,6 +371,18 @@ private fun PassVaultApp(
                         onMarkChosen = { chosenIcon, chosenColour ->
                             viewModel.setEventMark(current.id, chosenIcon, chosenColour)
                         },
+                        onShare = { chosen ->
+                            screen = Screen.Share(
+                                if (chosen == null) {
+                                    ShareScope.Event(current.id, current.name)
+                                } else {
+                                    ShareScope.Tickets(current.id, current.name, chosen.toList())
+                                },
+                            )
+                        },
+                        onExport = { chosen, password ->
+                            viewModel.export(current.id, chosen, password)
+                        },
                     )
                 }
                 is Screen.Ticket -> TicketPane(
@@ -389,10 +407,32 @@ private fun PassVaultApp(
                         else Screen.Wallet
                     },
                 )
-                Screen.Share -> SharePane(onBack = { screen = Screen.Wallet })
+                is Screen.Share -> SharePane(
+                    scope = current.scope,
+                    onBack = { screen = Screen.Wallet },
+                )
             }
         }
     }
+    }
+
+    val exported by viewModel.exported.collectAsStateWithLifecycle()
+    LaunchedEffect(exported) {
+        val file = exported ?: return@LaunchedEffect
+        val uri = androidx.core.content.FileProvider.getUriForFile(
+            context,
+            context.packageName + ".files",
+            file,
+        )
+        val send = Intent(Intent.ACTION_SEND).apply {
+            type = "application/vnd.passvault.tkpak"
+            putExtra(Intent.EXTRA_STREAM, uri)
+            // Without this the receiving app is handed a URI it has no permission to open, which
+            // surfaces as a share that appears to work and delivers an empty file.
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        context.startActivity(Intent.createChooser(send, null))
+        viewModel.consumeExport()
     }
 
     pendingArchive?.let { bytes ->
@@ -528,8 +568,28 @@ private fun EventPane(
     onTicketClick: (String) -> Unit,
     onOpenDocument: (String) -> Unit,
     onMarkChosen: (String, String) -> Unit,
+    /** Null shares the whole event; a set shares exactly those tickets. */
+    onShare: (Set<String>?) -> Unit,
+    /** The same scope, written to a file instead of handed to a phone in the room. */
+    onExport: (Set<String>?, String) -> Unit,
 ) {
+    var exporting by remember { mutableStateOf(false) }
     var picking by remember { mutableStateOf(false) }
+    // Null while browsing. Entering selection is its own act rather than a long press, because a
+    // long press on a ticket is undiscoverable and this is the screen where somebody arrives
+    // meaning to hand two seats to a friend.
+    var selection by remember { mutableStateOf<Set<String>?>(null) }
+
+    if (exporting) {
+        com.mateof.passvault.ui.wallet.ExportDialog(
+            ticketCount = selection?.size ?: tickets.size,
+            onDismiss = { exporting = false },
+            onExport = { password ->
+                onExport(selection, password)
+                exporting = false
+            },
+        )
+    }
 
     if (picking) {
         com.mateof.passvault.ui.wallet.MarkPickerDialog(
@@ -551,15 +611,20 @@ private fun EventPane(
                 // the one place on this screen where the event is being named rather than its
                 // tickets listed.
                 title = {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        com.mateof.passvault.ui.wallet.EventMark(
-                            eventId = eventId,
-                            icon = icon,
-                            colour = colour,
-                            size = 28.dp,
-                        )
-                        Spacer(Modifier.width(12.dp))
-                        Text(title)
+                    val chosen = selection
+                    if (chosen == null) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            com.mateof.passvault.ui.wallet.EventMark(
+                                eventId = eventId,
+                                icon = icon,
+                                colour = colour,
+                                size = 28.dp,
+                            )
+                            Spacer(Modifier.width(12.dp))
+                            Text(title)
+                        }
+                    } else {
+                        Text(pluralStringResource(R.plurals.tickets_selected, chosen.size, chosen.size))
                     }
                 },
                 navigationIcon = {
@@ -568,11 +633,59 @@ private fun EventPane(
                     }
                 },
                 actions = {
-                    IconButton(onClick = { picking = true }) {
-                        Icon(
-                            Icons.Filled.Palette,
-                            contentDescription = stringResource(R.string.event_mark_title),
-                        )
+                    if (selection == null) {
+                        IconButton(onClick = { picking = true }) {
+                            Icon(
+                                Icons.Filled.Palette,
+                                contentDescription = stringResource(R.string.event_mark_title),
+                            )
+                        }
+                        IconButton(onClick = { selection = emptySet() }) {
+                            Icon(
+                                Icons.Filled.Checklist,
+                                contentDescription = stringResource(R.string.action_select),
+                            )
+                        }
+                        IconButton(onClick = { onShare(null) }) {
+                            Icon(
+                                Icons.Filled.Share,
+                                contentDescription = stringResource(R.string.action_share),
+                            )
+                        }
+                        IconButton(onClick = { exporting = true }) {
+                            Icon(
+                                Icons.Filled.Save,
+                                contentDescription = stringResource(R.string.action_export),
+                            )
+                        }
+                    } else {
+                        // Sharing nothing is not a transfer, so the action waits until something
+                        // is picked rather than starting one that would hand over an event and no
+                        // tickets.
+                        IconButton(
+                            onClick = { selection?.let(onShare) },
+                            enabled = selection?.isNotEmpty() == true,
+                        ) {
+                            Icon(
+                                Icons.Filled.Share,
+                                contentDescription = stringResource(R.string.action_share),
+                            )
+                        }
+                        IconButton(
+                            onClick = { exporting = true },
+                            enabled = selection?.isNotEmpty() == true,
+                        ) {
+                            Icon(
+                                Icons.Filled.Save,
+                                contentDescription = stringResource(R.string.action_export),
+                            )
+                        }
+                        IconButton(onClick = { selection = null }) {
+                            Icon(
+                                Icons.Filled.Close,
+                                contentDescription = stringResource(R.string.action_cancel),
+                            )
+                        }
                     }
                 },
             )
@@ -582,8 +695,13 @@ private fun EventPane(
             state = WalletUiState(tickets = tickets),
             onTicketClick = onTicketClick,
             modifier = Modifier.padding(padding),
-            documents = documents,
+            // Hidden while choosing: the annex is not a ticket and cannot be handed over as one.
+            documents = if (selection == null) documents else emptyList(),
             onOpenDocument = onOpenDocument,
+            selected = selection,
+            onToggleSelection = { id ->
+                selection = selection?.let { if (id in it) it - id else it + id }
+            },
         )
     }
 }
@@ -686,7 +804,11 @@ private fun TicketPane(detail: TicketDetail, onBack: () -> Unit, onOpenDocument:
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun SharePane(onBack: () -> Unit, viewModel: ShareViewModel = hiltViewModel()) {
+private fun SharePane(
+    scope: ShareScope,
+    onBack: () -> Unit,
+    viewModel: ShareViewModel = hiltViewModel(),
+) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val deviceName = remember { android.os.Build.MODEL ?: "PassVault" }
@@ -704,12 +826,35 @@ private fun SharePane(onBack: () -> Unit, viewModel: ShareViewModel = hiltViewMo
         androidx.activity.result.contract.ActivityResultContracts.RequestPermission(),
     ) { allowed -> granted = allowed }
 
+    // Before anything is advertised, so a phone never offers more than the screen said it would.
+    LaunchedEffect(scope) { viewModel.offer(scope) }
+
     LaunchedEffect(granted) {
         if (granted) {
             viewModel.start(deviceName)
         } else {
             request.launch(android.Manifest.permission.NEARBY_WIFI_DEVICES)
         }
+    }
+
+    /**
+     * Listening for the other phone to be held against this one.
+     *
+     * Both phones do this and both also publish a tag, so neither user has to be told which of
+     * them is "the reader" — whichever pair of hands moves first wins the race, and the other
+     * side's reader finds nothing because the transfer has already started.
+     *
+     * Only while this screen is up. Reader mode takes NFC away from the rest of the system, and an
+     * app that kept it after the user moved on would break every contactless payment on the phone.
+     */
+    val activity = context as? android.app.Activity
+    DisposableEffect(activity) {
+        val reader = activity?.let { com.mateof.passvault.share.NfcReader(it) }
+        reader?.start(
+            onRead = { handover -> viewModel.connectTapped(handover) },
+            onFailure = { viewModel.reportTapFailure(it) },
+        )
+        onDispose { reader?.stop() }
     }
 
     // Leaving the screen tears down the advertisement and the listening socket. A phone that keeps

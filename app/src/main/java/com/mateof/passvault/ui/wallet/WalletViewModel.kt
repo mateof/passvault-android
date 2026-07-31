@@ -24,6 +24,7 @@ import kotlinx.coroutines.withContext
 @kotlin.OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 @HiltViewModel
 class WalletViewModel @Inject constructor(
+    @dagger.hilt.android.qualifiers.ApplicationContext private val context: android.content.Context,
     private val repository: WalletRepository,
     private val rasterizer: com.mateof.passvault.ingest.PageRasterizer,
 ) : ViewModel() {
@@ -178,6 +179,42 @@ class WalletViewModel @Inject constructor(
 
     fun openEvent(eventId: String?) {
         _openEvent.value = eventId
+    }
+
+    private val _exported = MutableStateFlow<java.io.File?>(null)
+
+    /** Where the last file was written, for the screen to hand to the system share sheet. */
+    val exported: StateFlow<java.io.File?> = _exported.asStateFlow()
+
+    /**
+     * Writes a `.tkpak` into this app's own cache.
+     *
+     * The cache rather than Downloads, and shared out through a FileProvider: the file is a bearer
+     * object holding barcodes, and leaving a copy in a folder every app can read would undo the
+     * password it was just given.
+     */
+    fun export(eventId: String, ticketIds: Set<String>?, password: String) {
+        viewModelScope.launch {
+            val written = withContext(Dispatchers.IO) {
+                runCatching {
+                    val bytes = repository.exportTkpak(eventId, ticketIds, password)
+                    val directory = java.io.File(context.cacheDir, "shared").apply { mkdirs() }
+                    // One at a time: the previous file has already been sent or abandoned, and
+                    // keeping them would leave a pile of encrypted tickets in the cache.
+                    directory.listFiles()?.forEach { it.delete() }
+                    java.io.File(directory, "passvault-${eventId.take(8)}.tkpak")
+                        .apply { writeBytes(bytes) }
+                }
+            }
+            written.fold(
+                onSuccess = { _exported.value = it },
+                onFailure = { _events.value = ImportOutcome.Unreadable },
+            )
+        }
+    }
+
+    fun consumeExport() {
+        _exported.value = null
     }
 
     /** Records the icon and colour somebody chose for an event. */

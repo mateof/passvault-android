@@ -27,6 +27,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.mateof.passvault.R
 import com.mateof.passvault.share.DiscoveredPeer
+import com.mateof.passvault.share.ShareScope
 import com.mateof.passvault.share.TransferError
 import com.mateof.passvault.ui.theme.LocalSpacing
 
@@ -58,6 +59,26 @@ fun ShareScreen(
             .padding(spacing.medium),
         verticalArrangement = Arrangement.spacedBy(spacing.medium),
     ) {
+        // What is about to leave, said before anything leaves. A transfer that hands over a whole
+        // wallet when somebody meant one seat is not recoverable: the other phone has the tickets.
+        ScopeBanner(state.scope)
+
+        // Said while there is still time to do it, rather than as an explanation afterwards.
+        if (state.stage == ShareStage.Looking || state.stage == ShareStage.Idle) {
+            Text(
+                text = stringResource(R.string.share_tap_hint),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        if (state.pairedByTap) {
+            Text(
+                text = stringResource(R.string.share_tap_paired),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.primary,
+            )
+        }
+
         when (state.stage) {
             ShareStage.Idle, ShareStage.Looking -> Looking(state, onConnect)
             ShareStage.Greeting -> Busy(stringResource(R.string.share_greeting, state.peerName ?: ""))
@@ -89,6 +110,24 @@ fun ShareScreen(
             )
         }
     }
+}
+
+/** A line naming exactly what this transfer offers, above everything else on the screen. */
+@Composable
+private fun ScopeBanner(scope: ShareScope) {
+    Text(
+        text = when (scope) {
+            ShareScope.Everything -> stringResource(R.string.share_scope_everything)
+            is ShareScope.Event -> stringResource(R.string.share_scope_event, scope.eventName)
+            is ShareScope.Tickets -> pluralStringResource(
+                R.plurals.share_scope_tickets,
+                scope.ticketIds.size,
+                scope.ticketIds.size,
+                scope.eventName,
+            )
+        },
+        style = MaterialTheme.typography.titleMedium,
+    )
 }
 
 @Composable

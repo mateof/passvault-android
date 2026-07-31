@@ -4,4 +4,9 @@
          read once, turned into a ticket, and deleted — a photograph of a barcode left on disk
          is a plaintext ticket sitting outside the encrypted store. -->
     <cache-path name="captures" path="captures/" />
+
+    <!-- Where an exported .tkpak waits to be handed to whatever the user shares it with. The
+         cache again, and its own folder: the file is encrypted, but it is a bearer object and
+         has no business sitting anywhere another app can read without being granted it. -->
+    <cache-path name="shared" path="shared/" />
 </paths>

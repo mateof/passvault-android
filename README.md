@@ -22,6 +22,10 @@ about how the app behaves when there is no signal.
   Telegram, Bluetooth or email. The recipient needs the app and nothing else — no
   account, no server, no signup.
 - **Transfer directly** to another phone on the same Wi-Fi, with no internet at all.
+  Hold the two phones together and NFC does the pairing, so there is no code to
+  compare.
+- **Choose what goes**: the whole wallet, one event, or the two seats out of twelve
+  that belong to somebody else.
 - **Assign** tickets to people, or let them claim one each, and record who has paid.
 - **Update itself** from its own GitHub releases, verifying that what it downloaded
   is signed with the same key as the copy already installed.
@@ -36,6 +40,45 @@ from their phone.
 The app therefore says *withdraw*, not *revoke*, and tells you before an export that
 the file cannot be recalled. The full reasoning is in the server repository's
 [threat model](https://github.com/mateof/passvault/blob/main/docs/threat-model.md).
+
+## Choosing what to share
+
+Pairing two phones used to exchange both wallets entirely, which is right for two
+devices belonging to one person and wrong for handing a friend a seat. Sharing now
+starts from a scope: everything, one event, or tickets picked out of it with the
+tick icon in the event screen. The same choice drives the `.tkpak` file.
+
+Handing over some of an event's tickets gives the receiver a deliberately partial
+view — the event and the tickets named, not the ones that were not — and the screen
+says so before anything moves. Replay is built for that: an operation about a ticket
+nobody sent is a gap rather than an error, and a device that later learns the rest
+applies it then.
+
+## Pairing by touch
+
+The six digits exist because being on the same Wi-Fi authenticates nobody. They
+work, and they are the step people get wrong: a glance and a "yes" looks exactly
+like a check.
+
+Holding two phones together is a channel an attacker on the network cannot reach
+into, so the tap carries what the digits were protecting and the comparison stops
+being needed. Android Beam — the API everybody remembers for this — was deprecated
+in Android 10 and removed in 14, so this uses card emulation: one phone answers as
+a contactless card and the other reads it.
+
+What crosses is about a hundred bytes: an ephemeral public key, a single-use token
+and an address. The tickets still go over Wi-Fi, because NFC moves bytes slowly and
+a wallet is megabytes.
+
+Both halves are needed and both are tested. The tapping side refuses a socket
+presenting a key it did not read off the tag; the advertising side refuses a peer
+that cannot return the token. Without the second, the tap would prove to the
+receiver who it is talking to while the sender was still talking to anybody at all.
+The order is load-bearing too: the advertiser demands the token before revealing
+anything, or a peer that never tapped would be handed the very secret meant to
+distinguish it.
+
+A phone with no NFC compares the six digits exactly as before.
 
 ## Sharing over a local network
 

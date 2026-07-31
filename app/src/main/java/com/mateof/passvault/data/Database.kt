@@ -168,6 +168,19 @@ interface WalletDao {
 
     @Query("DELETE FROM tickets WHERE id = :ticketId")
     suspend fun deleteTicket(ticketId: String)
+
+    @Query("SELECT * FROM events WHERE id = :eventId")
+    suspend fun event(eventId: String): EventEntity?
+
+    /**
+     * Whole ticket rows, barcodes included.
+     *
+     * Separate from `ticketsOf`, which deliberately never selects a barcode so that scrolling a
+     * list neither decrypts forty payloads nor holds them in memory. Writing a file is the one
+     * moment they are all needed at once.
+     */
+    @Query("SELECT * FROM tickets WHERE event_id = :eventId ORDER BY created_at ASC")
+    suspend fun ticketsForExport(eventId: String): List<TicketEntity>
 }
 
 data class TicketWithBarcode(

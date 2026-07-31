@@ -20,6 +20,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -86,6 +87,14 @@ fun WalletScreen(
     /** The files these tickets were split out of. Empty for an event nobody imported. */
     documents: List<DocumentRow> = emptyList(),
     onOpenDocument: (String) -> Unit = {},
+    /**
+     * Which tickets are picked out, when the screen is choosing rather than browsing.
+     *
+     * Null means it is not choosing at all, which is a different state from choosing none — the
+     * rows behave differently, and a tap opens a ticket in one and toggles it in the other.
+     */
+    selected: Set<String>? = null,
+    onToggleSelection: (String) -> Unit = {},
 ) {
     val spacing = LocalSpacing.current
 
@@ -120,7 +129,11 @@ fun WalletScreen(
                     // One content type, so the item pool is reused rather than reallocated per row.
                     contentType = { "ticket" },
                 ) { ticket ->
-                    TicketCard(ticket = ticket, onClick = onTicketClick)
+                    TicketCard(
+                        ticket = ticket,
+                        onClick = if (selected == null) onTicketClick else onToggleSelection,
+                        chosen = selected?.contains(ticket.id),
+                    )
                 }
             }
         }
@@ -158,6 +171,8 @@ private fun TicketCard(
     ticket: TicketRow,
     onClick: (String) -> Unit,
     modifier: Modifier = Modifier,
+    /** Null while browsing; true or false while choosing which tickets to hand over. */
+    chosen: Boolean? = null,
 ) {
     val spacing = LocalSpacing.current
     val interactionSource = remember { MutableInteractionSource() }
@@ -179,6 +194,14 @@ private fun TicketCard(
             .fillMaxWidth()
             .graphicsLayer { scaleX = scale; scaleY = scale },
         shape = RoundedCornerShape(20.dp),
+        colors = if (chosen == true) {
+            CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.primaryContainer,
+                contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+            )
+        } else {
+            CardDefaults.cardColors()
+        },
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp, pressedElevation = 0.dp),
     ) {
         Row(
@@ -186,7 +209,13 @@ private fun TicketCard(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(spacing.medium),
         ) {
-            StateDot(ticket.state)
+            // The tick replaces the state dot while choosing. Two circles side by side, one
+            // meaning "claimed" and the other "picked", is two things nobody can tell apart.
+            if (chosen == null) {
+                StateDot(ticket.state)
+            } else {
+                Checkbox(checked = chosen, onCheckedChange = { onClick(ticket.id) })
+            }
             Column(
                 modifier = Modifier.weight(1f),
                 verticalArrangement = Arrangement.spacedBy(spacing.tight),

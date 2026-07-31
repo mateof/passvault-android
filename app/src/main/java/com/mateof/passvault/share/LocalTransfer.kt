@@ -183,9 +183,18 @@ class TransferServer(private val onConnection: (Socket) -> Unit) {
 /** The dialling half. */
 object TransferClient {
     fun connect(peer: DiscoveredPeer, timeoutMillis: Int = 10_000): Socket =
+        connect(peer.address, peer.port, timeoutMillis)
+
+    /**
+     * By address rather than by discovered peer.
+     *
+     * What a tap produces: the other phone said where it is, so there is no list to browse and no
+     * name to pick out of two identical ones.
+     */
+    fun connect(host: String, port: Int, timeoutMillis: Int = 10_000): Socket =
         Socket().apply {
             tcpNoDelay = true
             soTimeout = timeoutMillis
-            connect(java.net.InetSocketAddress(peer.host, peer.port), timeoutMillis)
+            connect(java.net.InetSocketAddress(host, port), timeoutMillis)
         }
 }

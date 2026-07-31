@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    The application identifier this phone answers to when another one touches it.
+
+    In the F0-prefixed range, which ISO 7816 reserves for identifiers that are not registered with
+    anybody. That is the correct range for two copies of the same app talking to each other: nothing
+    here is meant to be reachable by a payment terminal, and claiming a registered identifier would
+    mean answering for somebody else's application.
+
+    `requireDeviceUnlock` is true. The handover authorises a transfer of tickets, and a phone in a
+    pocket should not be able to be tapped into starting one.
+-->
+<host-apdu-service xmlns:android="http://schemas.android.com/apk/res/android"
+    android:description="@string/share_nfc_service"
+    android:requireDeviceUnlock="true">
+    <aid-group
+        android:description="@string/share_nfc_service"
+        android:category="other">
+        <!-- F0 followed by "PASSVT": seven bytes, which is what NfcReader.SELECT sends. The two
+             have to be the same or the phone being touched never answers. -->
+        <aid-filter android:name="F0504153535654" />
+    </aid-group>
+</host-apdu-service>

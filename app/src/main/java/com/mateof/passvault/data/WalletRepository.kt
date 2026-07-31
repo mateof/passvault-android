@@ -120,6 +120,86 @@ class WalletRepository(
             }
         }
 
+    /**
+     * Writes a `.tkpak` for a scope.
+     *
+     * The other half of a promise the app had been making without keeping: it could read these
+     * files since the first version and never write one, so "share tickets as a single encrypted
+     * file that travels over WhatsApp" was true of the format and not of this application.
+     *
+     * The password is the only key slot. Sealing to a recipient needs their agreement key, which
+     * is what pairing is for — a file is the route for when there is no pairing to be had, which
+     * is precisely when nobody has exchanged keys.
+     *
+     * Documents are left out deliberately. They are megabytes, they are the pages that are *not*
+     * tickets, and a file sent through a messaging app is usually up against a size limit; the
+     * barcodes are what gets somebody through a turnstile.
+     */
+    suspend fun exportTkpak(
+        eventId: String,
+        ticketIds: Set<String>?,
+        password: String,
+    ): ByteArray {
+        val event = dao.event(eventId) ?: throw IllegalArgumentException("no such event")
+        val rows = dao.ticketsForExport(eventId)
+            .filter { ticketIds == null || it.id in ticketIds }
+
+        val bundle = com.mateof.passvault.tkpak.TkpakBundle(
+            fileId = Ids.newId(),
+            exportedAt = Ids.toInstant(),
+            event = com.mateof.passvault.tkpak.TkpakEvent(
+                id = event.id,
+                name = decrypt(event.nameCipher, "events", "name_cipher", event.id) ?: "",
+                venue = decrypt(event.venueCipher, "events", "venue_cipher", event.id),
+                startsAt = event.startsAt,
+                defaultAssignmentMode = event.defaultAssignmentMode,
+                passwordProtected = event.passwordProtected == 1,
+            ),
+            tickets = rows.map { row ->
+                com.mateof.passvault.tkpak.TkpakTicket(
+                    id = row.id,
+                    label = decrypt(row.labelCipher, "tickets", "label_cipher", row.id),
+                    seat = decrypt(row.seatCipher, "tickets", "seat_cipher", row.id),
+                    barcode = row.barcodeFormat?.let { format ->
+                        decrypt(row.barcodeCipher, "tickets", "barcode_cipher", row.id)?.let {
+                            com.mateof.passvault.tkpak.TkpakBarcode(format, it)
+                        }
+                    },
+                    assignmentMode = row.assignmentMode,
+                    assignment = com.mateof.passvault.tkpak.TkpakAssignment(
+                        state = row.assignmentState,
+                        holderLabel = decrypt(
+                            row.holderLabelCipher,
+                            "tickets",
+                            "holder_label_cipher",
+                            row.id,
+                        ),
+                    ),
+                    payment = row.paymentState?.let { state ->
+                        com.mateof.passvault.tkpak.TkpakPayment(
+                            state = state,
+                            amountCents = row.amountCents,
+                            currency = row.currency,
+                            visibility = "ALL",
+                        )
+                    },
+                )
+            },
+        )
+
+        val identity = keys.identity()
+        return com.mateof.passvault.tkpak.TkpakWriter.write(
+            com.mateof.passvault.tkpak.TkpakWriter.Input(
+                issuer = com.mateof.passvault.tkpak.TkpakWriter.Issuer(
+                    deviceId = identity.deviceId,
+                    privateKey = identity.signingPrivateKey,
+                ),
+                bundle = bundle,
+                password = password,
+            ),
+        )
+    }
+
     /** The tickets of one event, decrypted the same way as the wallet list. */
     fun ticketsOf(eventId: String, locale: Locale = Locale.getDefault()): Flow<List<TicketRow>> =
         dao.ticketsOf(eventId).map { rows ->
