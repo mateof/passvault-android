@@ -70,7 +70,11 @@ class ServerApi(private val settings: ServerSettings) {
                 header("Accept-Language", settings.locale())
                 when (method) {
                     "GET" -> get()
-                    "DELETE" -> delete()
+                    // With a body when there is one: revoking access names its subject in the
+                    // body, and a DELETE that dropped it would revoke nothing.
+                    "DELETE" ->
+                        if (body == null) delete() else delete(body.toString().toRequestBody(jsonType))
+                    "PATCH" -> patch((body ?: JsonObject(emptyMap())).toString().toRequestBody(jsonType))
                     else -> post((body ?: JsonObject(emptyMap())).toString().toRequestBody(jsonType))
                 }
             }
@@ -310,14 +314,95 @@ class ServerApi(private val settings: ServerSettings) {
                 name = it.text("name").orEmpty(),
                 role = it.text("role").orEmpty(),
                 memberCount = it["memberCount"]?.jsonPrimitive?.content?.toIntOrNull() ?: 0,
+                isOwner = it["isOwner"]?.jsonPrimitive?.content == "true",
             )
         }
 
     fun createGroup(name: String): String =
         call("/api/v1/groups", buildJsonObject { put("name", name) }).text("groupId").orEmpty()
 
+    fun renameGroup(groupId: String, name: String) {
+        call("/api/v1/groups/$groupId", buildJsonObject { put("name", name) }, method = "PATCH")
+    }
+
+    fun deleteGroup(groupId: String) {
+        call("/api/v1/groups/$groupId", method = "DELETE")
+    }
+
+    /** Who is in it, by address: a list of identifiers is not a list of people. */
+    fun members(groupId: String): List<GroupMember> =
+        (call("/api/v1/groups/$groupId/members")["members"] as? JsonArray).orEmpty()
+            .map { it.jsonObject }
+            .map {
+                GroupMember(
+                    userId = it.text("userId").orEmpty(),
+                    email = it.text("email").orEmpty(),
+                    role = it.text("role").orEmpty(),
+                    isSelf = it["isSelf"]?.jsonPrimitive?.content == "true",
+                )
+            }
+
     fun addMember(groupId: String, email: String) {
         call("/api/v1/groups/$groupId/members", buildJsonObject { put("email", email) })
+    }
+
+    fun removeMember(groupId: String, userId: String) {
+        call("/api/v1/groups/$groupId/members/$userId", method = "DELETE")
+    }
+
+    /**
+     * Whether an address belongs to an account on this server.
+     *
+     * Asked before sharing rather than after: a typo in an address is otherwise discovered when a
+     * friend never sees the ticket, which is far too late to be useful.
+     */
+    fun lookup(email: String): Boolean =
+        call("/api/v1/directory/lookup?email=" + java.net.URLEncoder.encode(email, "UTF-8"))["exists"]
+            ?.jsonPrimitive?.content == "true"
+
+    /** Who an event is shared with, so sharing is something the organiser can look at. */
+    fun eventAccess(eventId: String): List<AccessEntry> =
+        (call("/api/v1/events/$eventId/access")["access"] as? JsonArray).orEmpty()
+            .map { it.jsonObject }
+            .map {
+                AccessEntry(
+                    subjectKind = it.text("subjectKind").orEmpty(),
+                    subjectId = it.text("subjectId").orEmpty(),
+                    label = it.text("label").orEmpty(),
+                )
+            }
+
+    fun shareEventWithPerson(eventId: String, email: String) {
+        call(
+            "/api/v1/events/$eventId/access",
+            buildJsonObject {
+                put("subjectKind", "USER")
+                put("email", email)
+            },
+        )
+    }
+
+    fun revokeAccess(eventId: String, subjectKind: String, subjectId: String) {
+        call(
+            "/api/v1/events/$eventId/access",
+            buildJsonObject {
+                put("subjectKind", subjectKind)
+                put("subjectId", subjectId)
+            },
+            method = "DELETE",
+        )
+    }
+
+    /** Takes a free ticket in a self-claim event. No coupon: the caller is looking at the event. */
+    fun claimFree(eventId: String): String =
+        call("/api/v1/events/$eventId/claim", buildJsonObject { }).text("ticketId").orEmpty()
+
+    /** Gives one to somebody with an account, which is what makes it theirs and nobody else's. */
+    fun assignTicket(ticketId: String, holderUserId: String) {
+        call(
+            "/api/v1/tickets/$ticketId/assign",
+            buildJsonObject { put("holderUserId", holderUserId) },
+        )
     }
 
     /**
@@ -399,7 +484,26 @@ class ServerApi(private val settings: ServerSettings) {
         if (isString) content else null
 }
 
-data class Group(val id: String, val name: String, val role: String, val memberCount: Int)
+data class Group(
+    val id: String,
+    val name: String,
+    val role: String,
+    val memberCount: Int,
+    /** Whether this account may rename or delete it, which the screen has to know before drawing. */
+    val isOwner: Boolean = false,
+)
+
+data class GroupMember(
+    val userId: String,
+    val email: String,
+    val role: String,
+    val isSelf: Boolean,
+) {
+    val isOwner: Boolean get() = role == "OWNER"
+}
+
+/** A group or a person an event is shared with, named the way its owner thinks of them. */
+data class AccessEntry(val subjectKind: String, val subjectId: String, val label: String)
 
 /** What an authenticator needs, in the two forms one might be given it. */
 data class TotpEnrolment(val secret: String, val uri: String)

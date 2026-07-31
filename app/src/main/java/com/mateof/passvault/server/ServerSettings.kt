@@ -42,6 +42,29 @@ class ServerSettings(context: Context) {
         preferences.edit().remove(BASE_URL).apply()
     }
 
+    /**
+     * The password to publish an event under, chosen before it has ever been uploaded.
+     *
+     * A password decides who can decrypt an event, and it can only be set as the event is created
+     * on the server — which for a wallet built offline happens during a synchronisation, long
+     * after the person who wanted the password was looking at the screen. So the choice is kept
+     * here until the synchronisation that uses it.
+     *
+     * Alongside the address rather than behind the vault key, for the same reason the address is:
+     * the synchronisation needs it before anything has been unlocked. It is a password for an
+     * event the phone already holds in the clear, so keeping it here reveals nothing the device
+     * does not already have — and it is dropped as soon as it has been used.
+     */
+    fun eventPassword(eventId: String): String? =
+        preferences.getString(EVENT_PASSWORD + eventId, null)?.takeIf { it.isNotBlank() }
+
+    fun setEventPassword(eventId: String, password: String?) {
+        preferences.edit().apply {
+            if (password.isNullOrBlank()) remove(EVENT_PASSWORD + eventId)
+            else putString(EVENT_PASSWORD + eventId, password)
+        }.apply()
+    }
+
     /** What the server should answer in. Its catalogue has the same three languages. */
     fun locale(): String = when (Locale.getDefault().language) {
         "es" -> "es"
@@ -51,5 +74,6 @@ class ServerSettings(context: Context) {
 
     private companion object {
         const val BASE_URL = "base_url"
+        const val EVENT_PASSWORD = "event_password:"
     }
 }

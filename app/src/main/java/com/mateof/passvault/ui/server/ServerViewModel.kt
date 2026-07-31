@@ -196,7 +196,14 @@ class ServerViewModel @Inject constructor(
                         } else {
                             emptyList()
                         }
-                        val result = api.sync(eventId, mine, cursor = null, eventPassword = null)
+                        // The password the event is to be published under, if one was
+                        // chosen. It can only be set as the server creates the event, which for a
+                        // wallet built offline is now rather than when somebody asked for it.
+                        val chosen = settings.eventPassword(eventId)
+                        val result = api.sync(eventId, mine, cursor = null, eventPassword = chosen)
+                        // Dropped once it has done its work. Keeping it would leave a password
+                        // for an event on disk with nothing left to use it for.
+                        if (chosen != null && result.created) settings.setEventPassword(eventId, null)
                         sent += mine.size
                         if (result.created) published += 1
                         applied += log.accept(result.received)

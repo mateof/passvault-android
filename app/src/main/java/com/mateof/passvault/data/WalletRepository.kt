@@ -131,9 +131,10 @@ class WalletRepository(
      * is what pairing is for — a file is the route for when there is no pairing to be had, which
      * is precisely when nobody has exchanged keys.
      *
-     * Documents are left out deliberately. They are megabytes, they are the pages that are *not*
-     * tickets, and a file sent through a messaging app is usually up against a size limit; the
-     * barcodes are what gets somebody through a turnstile.
+     * The original document goes with a whole event and not with a selection of seats. It is
+     * megabytes and a file sent through a messaging app is usually up against a size limit — but
+     * it is also the pages ingestion drops on purpose, which is what somebody arriving at an
+     * unfamiliar venue actually needs, so a whole event carries it and two seats do not.
      */
     suspend fun exportTkpak(
         eventId: String,
@@ -143,6 +144,22 @@ class WalletRepository(
         val event = dao.event(eventId) ?: throw IllegalArgumentException("no such event")
         val rows = dao.ticketsForExport(eventId)
             .filter { ticketIds == null || it.id in ticketIds }
+
+        // The file the tickets were split out of, whole. Sending only the tickets sends only what
+        // ingestion kept, and the pages it drops on purpose — the map, the terms, how to get in —
+        // are exactly what somebody receiving a ticket for an unfamiliar venue needs.
+        //
+        // Only for a whole event. Somebody being handed one seat is not being handed everybody's
+        // document, and a thirty-megabyte PDF beside a single ticket is a poor trade anyway.
+        val originals = if (ticketIds == null) {
+            documents.forEvent(eventId).mapNotNull { row ->
+                documentStore.read(row.id)?.let { bytes ->
+                    com.mateof.passvault.tkpak.TkpakDocument(row.id, row.mediaType, bytes)
+                }
+            }
+        } else {
+            emptyList()
+        }
 
         val bundle = com.mateof.passvault.tkpak.TkpakBundle(
             fileId = Ids.newId(),
@@ -154,6 +171,7 @@ class WalletRepository(
                 startsAt = event.startsAt,
                 defaultAssignmentMode = event.defaultAssignmentMode,
                 passwordProtected = event.passwordProtected == 1,
+                documentIds = originals.map { it.id },
             ),
             tickets = rows.map { row ->
                 com.mateof.passvault.tkpak.TkpakTicket(
@@ -195,6 +213,7 @@ class WalletRepository(
                     privateKey = identity.signingPrivateKey,
                 ),
                 bundle = bundle,
+                documents = originals,
                 password = password,
             ),
         )
@@ -278,6 +297,26 @@ class WalletRepository(
                 )
             },
         )
+
+        // The original the tickets came out of, kept as this wallet's own. Encrypted on the way in
+        // under this device's key, like everything else that arrives: the file was sealed for
+        // transport, and transport is over.
+        for (documentId in event.documentIds) {
+            val document = opened.documents[documentId] ?: continue
+            documentStore.write(document.id, document.bytes)
+            documents.upsert(
+                DocumentEntity(
+                    id = document.id,
+                    eventId = event.id,
+                    mediaType = document.mediaType,
+                    // Unknown until it is opened and drawn, and a wrong number is worse than none.
+                    // The annex counts what it renders; this is only what the row says beforehand.
+                    pageCount = 0,
+                    byteCount = document.bytes.size,
+                    createdAt = now,
+                ),
+            )
+        }
     }
 
     /**

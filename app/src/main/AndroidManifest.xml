@@ -19,6 +19,9 @@
          own: since Android 8 the user grants it per application in Settings, and the update
          screen sends them there rather than failing silently at the last step. -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <!-- Only for the "PassVault has updated, open it again" message. Declining it costs the
+         notification and nothing else. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <!-- Pairing two phones by touching them. Not required: everything works without NFC, the
          six-digit comparison is still there for phones that have none, and a device with no NFC
@@ -88,6 +91,17 @@
             android:exported="false">
             <intent-filter>
                 <action android:name="com.mateof.passvault.INSTALL_RESULT" />
+            </intent-filter>
+        </receiver>
+
+        <!-- Delivered to the new version of the app once it has replaced the old one, which is
+             the only moment at which an app that updated itself can offer to come back. Exported
+             is not needed: the sender is the system. -->
+        <receiver
+            android:name=".update.RestartAfterUpdate"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
             </intent-filter>
         </receiver>
 

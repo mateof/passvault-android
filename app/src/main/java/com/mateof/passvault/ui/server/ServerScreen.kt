@@ -49,9 +49,6 @@ fun ServerScreen(
     onUnlock: (String) -> Unit,
     onSync: () -> Unit,
     onForget: () -> Unit,
-    onCreateGroup: (String) -> Unit,
-    onAddMember: (String, String) -> Unit,
-    onShareEvent: (String) -> Unit,
     onPasskeySignIn: () -> Unit,
     onAddPasskey: () -> Unit,
     onEnrolTotp: () -> Unit,
@@ -89,13 +86,6 @@ fun ServerScreen(
             ServerStage.Vault -> VaultStep(onUnlock)
             ServerStage.Ready -> {
                 ReadyStep(state, onSync, onForget, onAddPasskey, onEnrolTotp, onConfirmTotp, onOpenUri)
-                GroupsSection(
-                    groups = state.groups,
-                    onCreateGroup = onCreateGroup,
-                    onAddMember = onAddMember,
-                    onShareEvent = onShareEvent,
-                    sharingEventName = sharingEventName,
-                )
             }
         }
     }

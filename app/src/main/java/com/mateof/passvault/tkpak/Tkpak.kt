@@ -151,6 +151,18 @@ data class TkpakEvent(
     val notes: String? = null,
     val defaultAssignmentMode: String,
     val passwordProtected: Boolean,
+    /**
+     * Documents belonging to the event rather than to any one ticket.
+     *
+     * The file the tickets were split out of. Every other document in a package is a single
+     * ticket's page, reached from the ticket, and a reader with only that link could not tell the
+     * original apart from a page — so exports carried the pages and dropped the one document that
+     * holds the map, the terms and the gate instructions.
+     *
+     * Absent in packages written before this existed, which is what those packages are: files
+     * with no original.
+     */
+    val documentIds: List<String> = emptyList(),
 )
 
 @Serializable

@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.FolderOpen
+import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Checklist
@@ -136,6 +137,7 @@ private sealed interface Screen {
     data class Ticket(val ticketId: String) : Screen
     data class Share(val scope: ShareScope) : Screen
     data class Document(val eventId: String) : Screen
+    data object Groups : Screen
     data object Server : Screen
     data object Updates : Screen
 }
@@ -201,6 +203,7 @@ private fun PassVaultApp(
     BackHandler(enabled = screen is Screen.Document) { backFromDocument() }
     BackHandler(
         enabled = screen is Screen.Event ||
+            screen is Screen.Groups ||
             screen is Screen.Server ||
             screen is Screen.Updates,
     ) {
@@ -312,6 +315,7 @@ private fun PassVaultApp(
     val drawer = rememberDrawerState(DrawerValue.Closed)
     val scope = rememberCoroutineScope()
     val destination = when (screen) {
+        Screen.Groups -> Destination.Groups
         is Screen.Share -> Destination.Share
         Screen.Server -> Destination.Server
         Screen.Updates -> Destination.Updates
@@ -323,6 +327,7 @@ private fun PassVaultApp(
         viewModel.openEvent(null)
         screen = when (chosen) {
             Destination.Wallet -> Screen.Wallet
+            Destination.Groups -> Screen.Groups
             Destination.Share -> Screen.Share(ShareScope.Everything)
             Destination.Server -> Screen.Server
             Destination.Updates -> Screen.Updates
@@ -436,6 +441,7 @@ private fun PassVaultApp(
                         }
                     },
                 )
+                Screen.Groups -> GroupsPane(onBack = { screen = Screen.Wallet })
                 Screen.Server -> ServerPane(onBack = { screen = Screen.Wallet })
                 Screen.Updates -> UpdatePane(onBack = { screen = Screen.Wallet })
                 is Screen.Document -> DocumentPane(
@@ -610,6 +616,9 @@ private fun EventPane(
 ) {
     var exporting by remember { mutableStateOf(false) }
     var picking by remember { mutableStateOf(false) }
+    var sharingWith by remember { mutableStateOf(false) }
+    val sharing: com.mateof.passvault.ui.groups.SharingViewModel = hiltViewModel()
+    val sharingState by sharing.state.collectAsStateWithLifecycle()
     // Null while browsing. Entering selection is its own act rather than a long press, because a
     // long press on a ticket is undiscoverable and this is the screen where somebody arrives
     // meaning to hand two seats to a friend.
@@ -623,6 +632,25 @@ private fun EventPane(
                 onExport(selection, password)
                 exporting = false
             },
+        )
+    }
+
+    if (sharingWith) {
+        com.mateof.passvault.ui.groups.ShareWithDialog(
+            access = sharingState.access,
+            groups = sharingState.groups,
+            eventPassword = sharingState.eventPassword,
+            onEventPasswordChanged = { sharing.setEventPassword(eventId, it) },
+            pendingEmail = sharingState.pendingEmail,
+            addressKnown = sharingState.addressKnown,
+            failure = sharingState.failure,
+            claimed = sharingState.claimed,
+            onClaim = { sharing.claim(eventId) },
+            onEmailChanged = { sharing.setPendingEmail(eventId, it) },
+            onShareWithGroup = { sharing.shareWithGroup(eventId, it) },
+            onShareWithPerson = { sharing.shareWithPerson(eventId) },
+            onRevoke = { sharing.revoke(eventId, it) },
+            onDismiss = { sharingWith = false },
         )
     }
 
@@ -685,6 +713,15 @@ private fun EventPane(
                             Icon(
                                 Icons.Filled.Share,
                                 contentDescription = stringResource(R.string.action_share),
+                            )
+                        }
+                        IconButton(onClick = {
+                            sharing.load(eventId)
+                            sharingWith = true
+                        }) {
+                            Icon(
+                                Icons.Filled.Group,
+                                contentDescription = stringResource(R.string.sharing_title),
                             )
                         }
                         IconButton(onClick = { exporting = true }) {
@@ -776,11 +813,6 @@ private fun ServerPane(
             onUnlock = viewModel::unlockVault,
             onSync = viewModel::sync,
             onForget = viewModel::forget,
-            onCreateGroup = viewModel::createGroup,
-            onAddMember = viewModel::addMember,
-            onShareEvent = { groupId ->
-                sharingEventId?.let { viewModel.shareEventWithGroup(it, groupId) }
-            },
             onPasskeySignIn = { viewModel.signInWithPasskey(passkeys) },
             onAddPasskey = { viewModel.addPasskey(passkeys, android.os.Build.MODEL ?: "Android") },
             onEnrolTotp = viewModel::enrolTotp,
@@ -819,6 +851,48 @@ private fun DocumentPane(
         },
     ) { padding ->
         com.mateof.passvault.ui.document.DocumentScreen(state, Modifier.padding(padding))
+    }
+}
+
+/**
+ * Groups, which are the people you share with more than once.
+ *
+ * On the main menu rather than buried in the server screen, where the first version put them: a
+ * group is something you keep and edit, not a step in connecting to a server.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun GroupsPane(
+    onBack: () -> Unit,
+    viewModel: com.mateof.passvault.ui.groups.GroupsViewModel = hiltViewModel(),
+) {
+    val state by viewModel.state.collectAsStateWithLifecycle()
+
+    LaunchedEffect(Unit) { viewModel.load() }
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text(stringResource(R.string.groups_title)) },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
+                    }
+                },
+            )
+        },
+    ) { padding ->
+        com.mateof.passvault.ui.groups.GroupsScreen(
+            state = state,
+            onOpen = viewModel::open,
+            onCreate = viewModel::create,
+            onRename = viewModel::rename,
+            onDelete = viewModel::delete,
+            onAddMember = viewModel::addMember,
+            onRemoveMember = viewModel::removeMember,
+            onEmailChanged = viewModel::setPendingEmail,
+            modifier = Modifier.padding(padding),
+        )
     }
 }
 
