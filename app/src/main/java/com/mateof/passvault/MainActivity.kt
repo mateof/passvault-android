@@ -147,6 +147,10 @@ private fun PassVaultApp(
     var screen by remember { mutableStateOf<Screen>(Screen.Wallet) }
     // Remembered so a ticket knows which event to go back to.
     var openEvent by remember { mutableStateOf<Pair<String, String>?>(null) }
+    // Which screen asked for the document, so closing it returns there rather than somewhere
+    // plausible. Cleared as it is used: a stale origin would send the next reader to the wrong
+    // place entirely.
+    var documentOrigin by remember { mutableStateOf<Screen?>(null) }
     val proposal by viewModel.pendingProposal.collectAsStateWithLifecycle()
     val pendingArchive by viewModel.pendingArchive.collectAsStateWithLifecycle()
     val documentState by viewModel.document.collectAsStateWithLifecycle()
@@ -161,10 +165,34 @@ private fun PassVaultApp(
     // user expects of a detail screen and what they do not get for free.
     // Back from a ticket returns to its event, not to the wallet: that is where the user came
     // from, and jumping two levels loses their place in a list of forty.
-    BackHandler(enabled = screen is Screen.Ticket || screen is Screen.Document) {
+    /**
+     * Where a detail screen goes back to.
+     *
+     * The event it belongs to, falling back to the wallet only when there is none — which happens
+     * for a ticket opened straight from a share intent. Used by the system gesture *and* by the
+     * arrow in the title bar: they were separate before, the gesture was right and the arrow
+     * dropped two levels, so which one somebody used decided where they ended up.
+     */
+    val backToEvent: () -> Unit = {
         val event = openEvent
         screen = if (event != null) Screen.Event(event.first, event.second) else Screen.Wallet
     }
+
+    /**
+     * Where the document screen goes back to.
+     *
+     * Wherever it was opened from, which is now two places: the annex inside an event, and a
+     * ticket. Returning a reader to the event when they came from a ticket loses their place in a
+     * list of forty just as surely as returning them to the wallet did.
+     */
+    val backFromDocument: () -> Unit = {
+        val origin = documentOrigin
+        documentOrigin = null
+        if (origin != null) screen = origin else backToEvent()
+    }
+
+    BackHandler(enabled = screen is Screen.Ticket) { backToEvent() }
+    BackHandler(enabled = screen is Screen.Document) { backFromDocument() }
     BackHandler(
         enabled = screen is Screen.Event ||
             screen is Screen.Server ||
@@ -366,6 +394,7 @@ private fun PassVaultApp(
                         },
                         onOpenDocument = { documentId ->
                             viewModel.openDocument(documentId)
+                            documentOrigin = current
                             screen = Screen.Document(current.id)
                         },
                         onMarkChosen = { chosenIcon, chosenColour ->
@@ -387,10 +416,11 @@ private fun PassVaultApp(
                 }
                 is Screen.Ticket -> TicketPane(
                     detail = current.detail,
-                    onBack = { screen = Screen.Wallet },
+                    onBack = backToEvent,
                     onOpenDocument = {
                         eventDocuments.firstOrNull()?.let { document ->
                             viewModel.openDocument(document.id)
+                            documentOrigin = current
                             screen = Screen.Document(current.detail.eventId)
                         }
                     },
@@ -399,13 +429,7 @@ private fun PassVaultApp(
                 Screen.Updates -> UpdatePane(onBack = { screen = Screen.Wallet })
                 is Screen.Document -> DocumentPane(
                     state = documentState,
-                    // Back to the event, not to the wallet. The annex is reached from inside an
-                    // event now, and dropping somebody two levels loses their place in a list.
-                    onBack = {
-                        val event = openEvent
-                        screen = if (event != null) Screen.Event(event.first, event.second)
-                        else Screen.Wallet
-                    },
+                    onBack = backFromDocument,
                 )
                 is Screen.Share -> SharePane(
                     scope = current.scope,

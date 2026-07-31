@@ -176,4 +176,5 @@
     <string name="server_totp_confirm">Confirm</string>
     <string name="server_totp_on">A second factor is on for this account.</string>
     <string name="server_totp_no_app">No authenticator app is installed. Type the key in by hand.</string>
+    <string name="document_zoom_hint">Pinch to zoom, or double tap</string>
 </resources>

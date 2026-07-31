@@ -182,4 +182,5 @@
     <string name="server_totp_confirm">Confirmar</string>
     <string name="server_totp_on">O segundo factor está activo nesta conta.</string>
     <string name="server_totp_no_app">Non hai ningunha aplicación de códigos instalada. Escribe a clave a man.</string>
+    <string name="document_zoom_hint">Pincha para achegar, ou toca dúas veces</string>
 </resources>
