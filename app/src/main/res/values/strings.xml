@@ -175,4 +175,11 @@
     </plurals>
     <string name="export_failed">Non se puido crear o ficheiro.</string>
     <string name="action_export">Gardar nun ficheiro</string>
+    <string name="server_totp_add">Activar o segundo factor</string>
+    <string name="server_totp_explain">Engade esta clave á túa aplicación de códigos e escribe despois o que amose. Vale calquera: Google Authenticator, Microsoft Authenticator, Aegis ou o teu xestor de contrasinais.</string>
+    <string name="server_totp_open">Abrir na aplicación de códigos</string>
+    <string name="server_totp_code">Código da aplicación</string>
+    <string name="server_totp_confirm">Confirmar</string>
+    <string name="server_totp_on">O segundo factor está activo nesta conta.</string>
+    <string name="server_totp_no_app">Non hai ningunha aplicación de códigos instalada. Escribe a clave a man.</string>
 </resources>

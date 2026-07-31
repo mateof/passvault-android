@@ -748,6 +748,17 @@ private fun ServerPane(
             },
             onPasskeySignIn = { viewModel.signInWithPasskey(passkeys) },
             onAddPasskey = { viewModel.addPasskey(passkeys, android.os.Build.MODEL ?: "Android") },
+            onEnrolTotp = viewModel::enrolTotp,
+            onConfirmTotp = viewModel::confirmTotp,
+            onOpenUri = { uri ->
+                // Whatever registered for `otpauth:` — Google Authenticator, Microsoft
+                // Authenticator, Aegis, a password manager. If nothing did, the key is on
+                // screen to be typed rather than the tap doing nothing.
+                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(uri))
+                if (intent.resolveActivity(context.packageManager) != null) {
+                    context.startActivity(intent)
+                }
+            },
             sharingEventName = sharingEventName,
             modifier = Modifier.padding(padding),
         )

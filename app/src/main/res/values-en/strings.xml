@@ -169,4 +169,11 @@
     </plurals>
     <string name="export_failed">The file could not be created.</string>
     <string name="action_export">Save to a file</string>
+    <string name="server_totp_add">Turn on a second factor</string>
+    <string name="server_totp_explain">Add this key to your authenticator app, then type what it shows. Any of them works: Google Authenticator, Microsoft Authenticator, Aegis, or your password manager.</string>
+    <string name="server_totp_open">Open in the authenticator app</string>
+    <string name="server_totp_code">Code from the app</string>
+    <string name="server_totp_confirm">Confirm</string>
+    <string name="server_totp_on">A second factor is on for this account.</string>
+    <string name="server_totp_no_app">No authenticator app is installed. Type the key in by hand.</string>
 </resources>

@@ -274,6 +274,30 @@ class ServerApi(private val settings: ServerSettings) {
         return outcomeOf(result)
     }
 
+    /**
+     * Starts enrolling a second factor.
+     *
+     * Returns the secret and the `otpauth:` URI that every authenticator understands. There is
+     * nothing Google-specific or Microsoft-specific about either: TOTP is RFC 6238, the URI is the
+     * key format Google published and everybody adopted, and the server's parameters — HMAC-SHA1,
+     * six digits, thirty seconds — are the ones both of those apps require of a third-party
+     * account.
+     *
+     * The secret is stored unconfirmed. An unconfirmed secret never satisfies a factor, so an
+     * enrolment abandoned halfway cannot lock somebody out with a code they never scanned.
+     */
+    fun totpEnrol(): TotpEnrolment {
+        val result = call("/api/v1/totp/enrol", JsonObject(emptyMap()))
+        return TotpEnrolment(
+            secret = result.text("secret").orEmpty(),
+            uri = result.text("uri").orEmpty(),
+        )
+    }
+
+    fun totpConfirm(code: String) {
+        call("/api/v1/totp/confirm", buildJsonObject { put("code", code) })
+    }
+
     fun passkeyRegisterOptions(): String =
         call("/api/v1/passkeys/register/options", JsonObject(emptyMap())).toString()
 
@@ -296,6 +320,9 @@ class ServerApi(private val settings: ServerSettings) {
 }
 
 data class Group(val id: String, val name: String, val role: String, val memberCount: Int)
+
+/** What an authenticator needs, in the two forms one might be given it. */
+data class TotpEnrolment(val secret: String, val uri: String)
 
 data class Account(val userId: String, val isAdmin: Boolean, val vaultUnlocked: Boolean)
 

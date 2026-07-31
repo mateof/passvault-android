@@ -54,6 +54,10 @@ fun ServerScreen(
     onShareEvent: (String) -> Unit,
     onPasskeySignIn: () -> Unit,
     onAddPasskey: () -> Unit,
+    onEnrolTotp: () -> Unit,
+    onConfirmTotp: (String) -> Unit,
+    /** Hands the `otpauth:` link to whichever authenticator is installed. */
+    onOpenUri: (String) -> Unit,
     sharingEventName: String? = null,
     modifier: Modifier = Modifier,
 ) {
@@ -84,7 +88,7 @@ fun ServerScreen(
             ServerStage.SecondFactor -> SecondFactorStep(state, onSecondFactor)
             ServerStage.Vault -> VaultStep(onUnlock)
             ServerStage.Ready -> {
-                ReadyStep(state, onSync, onForget, onAddPasskey)
+                ReadyStep(state, onSync, onForget, onAddPasskey, onEnrolTotp, onConfirmTotp, onOpenUri)
                 GroupsSection(
                     groups = state.groups,
                     onCreateGroup = onCreateGroup,
@@ -172,6 +176,85 @@ private fun SignInStep(
     TextButton(onClick = onForget) { Text(stringResource(R.string.server_forget)) }
 }
 
+/**
+ * Turning on a second factor, from the screen where somebody has just signed in.
+ *
+ * The secret is offered two ways because people are in two situations. The link opens whatever
+ * authenticator is installed — Google Authenticator, Microsoft Authenticator, Aegis, a password
+ * manager — since `otpauth:` is the format all of them register for; the text is for somebody
+ * enrolling on a different device from the one they are holding.
+ *
+ * There is no QR code, and that is worth saying rather than hiding: a phone cannot usefully scan
+ * its own screen, so the link is the better affordance here anyway.
+ *
+ * Nothing is in force until a code comes back correct. An enrolment abandoned halfway leaves the
+ * account exactly as it was.
+ */
+@Composable
+private fun SecondFactorEnrolment(
+    state: ServerUiState,
+    onEnrol: () -> Unit,
+    onConfirm: (String) -> Unit,
+    onOpenUri: (String) -> Unit,
+) {
+    val spacing = LocalSpacing.current
+    var code by rememberSaveable { mutableStateOf("") }
+
+    if (state.totpConfirmed) {
+        Text(
+            text = stringResource(R.string.server_totp_on),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.primary,
+        )
+        return
+    }
+
+    val enrolment = state.totp
+    if (enrolment == null) {
+        OutlinedButton(
+            onClick = onEnrol,
+            enabled = !state.busy,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text(stringResource(R.string.server_totp_add))
+        }
+        return
+    }
+
+    Column(verticalArrangement = Arrangement.spacedBy(spacing.small)) {
+        Text(
+            text = stringResource(R.string.server_totp_explain),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Button(
+            onClick = { onOpenUri(enrolment.uri) },
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text(stringResource(R.string.server_totp_open))
+        }
+        Text(
+            text = enrolment.secret,
+            style = MaterialTheme.typography.titleMedium,
+        )
+        OutlinedTextField(
+            value = code,
+            onValueChange = { code = it },
+            label = { Text(stringResource(R.string.server_totp_code)) },
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth(),
+        )
+        Button(
+            onClick = { onConfirm(code) },
+            enabled = !state.busy && code.isNotBlank(),
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text(stringResource(R.string.server_totp_confirm))
+        }
+    }
+}
+
 @Composable
 private fun SecondFactorStep(state: ServerUiState, onSubmit: (String, String) -> Unit) {
     var code by rememberSaveable { mutableStateOf("") }
@@ -238,6 +321,9 @@ private fun ReadyStep(
     onSync: () -> Unit,
     onForget: () -> Unit,
     onAddPasskey: () -> Unit,
+    onEnrolTotp: () -> Unit,
+    onConfirmTotp: (String) -> Unit,
+    onOpenUri: (String) -> Unit,
 ) {
     Text(state.address, style = MaterialTheme.typography.titleMedium)
     Text(
@@ -253,6 +339,8 @@ private fun ReadyStep(
     OutlinedButton(onClick = onAddPasskey, modifier = Modifier.fillMaxWidth()) {
         Text(stringResource(R.string.server_passkey_add))
     }
+
+    SecondFactorEnrolment(state, onEnrolTotp, onConfirmTotp, onOpenUri)
     if (state.passkeyAdded) {
         Text(
             text = stringResource(R.string.server_passkey_added),

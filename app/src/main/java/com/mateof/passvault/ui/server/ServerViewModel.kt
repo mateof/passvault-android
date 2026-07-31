@@ -231,6 +231,36 @@ class ServerViewModel @Inject constructor(
         )
     }
 
+    /**
+     * Begins enrolling a second factor.
+     *
+     * Kept on this screen rather than behind a settings menu: it is the screen where somebody has
+     * just proved they can sign in, which is the one moment they are thinking about how they sign
+     * in.
+     */
+    fun enrolTotp() {
+        viewModelScope.launch {
+            _state.value = _state.value.copy(busy = true, failure = null)
+            val result = withContext(Dispatchers.IO) { runCatching { api.totpEnrol() } }
+            _state.value = result.fold(
+                onSuccess = { _state.value.copy(busy = false, totp = it) },
+                onFailure = { _state.value.copy(busy = false, failure = describe(it)) },
+            )
+        }
+    }
+
+    /** Arms it. Nothing is in force until a code the authenticator produced comes back correct. */
+    fun confirmTotp(code: String) {
+        viewModelScope.launch {
+            _state.value = _state.value.copy(busy = true, failure = null)
+            val done = withContext(Dispatchers.IO) { runCatching { api.totpConfirm(code) } }
+            _state.value = done.fold(
+                onSuccess = { _state.value.copy(busy = false, totp = null, totpConfirmed = true) },
+                onFailure = { _state.value.copy(busy = false, failure = describe(it)) },
+            )
+        }
+    }
+
     /** Loads the groups this account belongs to. Only meaningful once the vault is open. */
     fun loadGroups() {
         viewModelScope.launch {
@@ -371,4 +401,7 @@ data class ServerUiState(
     val groups: List<com.mateof.passvault.server.Group> = emptyList(),
     val sharedWithGroup: Boolean = false,
     val passkeyAdded: Boolean = false,
+    /** Present while an enrolment is waiting for its first code. */
+    val totp: com.mateof.passvault.server.TotpEnrolment? = null,
+    val totpConfirmed: Boolean = false,
 )
