@@ -28,6 +28,10 @@ import org.robolectric.annotation.Config
  * The barcode payload is what each assertion looks for. It is the one field that differs per ticket
  * and the one somebody at a gate is actually reading, so if the right payload is on screen the
  * right ticket is.
+ *
+ * Under `testDebug` rather than `test`, so it runs for the debug variant only: hosting a composable
+ * needs an activity that comes from `ui-test-manifest`, and that manifest is merged into the debug
+ * build alone. A test activity has no business being declared in a release APK.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(qualifiers = "w400dp-h800dp")
