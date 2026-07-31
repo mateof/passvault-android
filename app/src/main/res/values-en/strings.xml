@@ -101,4 +101,16 @@
         <item quantity="one">%1$d awaiting confirmation</item>
         <item quantity="other">%1$d awaiting confirmation</item>
     </plurals>
+    <string name="groups_title">Groups</string>
+    <string name="groups_explain">A group is the people you share with more than once: the family, the usual crowd. Sharing an event with a group gives access to whoever is in it at that moment; adding somebody later does not hand them the tickets retroactively.</string>
+    <string name="groups_new">New group name</string>
+    <string name="groups_create">Create group</string>
+    <string name="groups_add_member">Add somebody</string>
+    <string name="groups_share_here">Share here</string>
+    <string name="groups_member_email">Email address</string>
+    <string name="groups_member_help">It has to be an account already registered on this server.</string>
+    <plurals name="groups_members">
+        <item quantity="one">%1$d person</item>
+        <item quantity="other">%1$d people</item>
+    </plurals>
 </resources>

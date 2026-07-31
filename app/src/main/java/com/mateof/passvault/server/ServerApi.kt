@@ -191,12 +191,50 @@ class ServerApi(private val settings: ServerSettings) {
         )
     }
 
+    // --- Groups and sharing -------------------------------------------------------------
+
+    fun groups(): List<Group> =
+        (call("/api/v1/groups")["groups"] as? JsonArray).orEmpty().map { it.jsonObject }.map {
+            Group(
+                id = it.text("id").orEmpty(),
+                name = it.text("name").orEmpty(),
+                role = it.text("role").orEmpty(),
+                memberCount = it["memberCount"]?.jsonPrimitive?.content?.toIntOrNull() ?: 0,
+            )
+        }
+
+    fun createGroup(name: String): String =
+        call("/api/v1/groups", buildJsonObject { put("name", name) }).text("groupId").orEmpty()
+
+    fun addMember(groupId: String, email: String) {
+        call("/api/v1/groups/$groupId/members", buildJsonObject { put("email", email) })
+    }
+
+    /**
+     * Gives a group or a person access to an event.
+     *
+     * The assignment mode travels with the event rather than with the grant: it is a property of
+     * how the tickets are handed out, not of who can see them.
+     */
+    fun shareEvent(eventId: String, subjectKind: String, subjectId: String, role: String = "MEMBER") {
+        call(
+            "/api/v1/events/$eventId/access",
+            buildJsonObject {
+                put("subjectKind", subjectKind)
+                put("subjectId", subjectId)
+                put("role", role)
+            },
+        )
+    }
+
     private fun JsonObject.text(key: String): String? =
         this[key]?.jsonPrimitive?.let { if (it.isString) it.content else null }
 
     private fun kotlinx.serialization.json.JsonPrimitive.contentOrNull(): String? =
         if (isString) content else null
 }
+
+data class Group(val id: String, val name: String, val role: String, val memberCount: Int)
 
 data class Account(val userId: String, val isAdmin: Boolean, val vaultUnlocked: Boolean)
 

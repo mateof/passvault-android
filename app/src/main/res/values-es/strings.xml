@@ -101,4 +101,16 @@
         <item quantity="one">%1$d pendiente de confirmar</item>
         <item quantity="other">%1$d pendientes de confirmar</item>
     </plurals>
+    <string name="groups_title">Grupos</string>
+    <string name="groups_explain">Un grupo es la gente con la que compartes más de una vez: la familia, la cuadrilla. Compartir un evento con un grupo da acceso a quien esté en él en ese momento; añadir a alguien después no le da las entradas hacia atrás.</string>
+    <string name="groups_new">Nombre del grupo nuevo</string>
+    <string name="groups_create">Crear grupo</string>
+    <string name="groups_add_member">Añadir a alguien</string>
+    <string name="groups_share_here">Compartir aquí</string>
+    <string name="groups_member_email">Correo electrónico</string>
+    <string name="groups_member_help">Tiene que ser una cuenta ya registrada en este servidor.</string>
+    <plurals name="groups_members">
+        <item quantity="one">%1$d persona</item>
+        <item quantity="other">%1$d personas</item>
+    </plurals>
 </resources>

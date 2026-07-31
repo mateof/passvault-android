@@ -48,6 +48,10 @@ fun ServerScreen(
     onUnlock: (String) -> Unit,
     onSync: () -> Unit,
     onForget: () -> Unit,
+    onCreateGroup: (String) -> Unit,
+    onAddMember: (String, String) -> Unit,
+    onShareEvent: (String) -> Unit,
+    sharingEventName: String? = null,
     modifier: Modifier = Modifier,
 ) {
     val spacing = LocalSpacing.current
@@ -76,7 +80,16 @@ fun ServerScreen(
             ServerStage.SignIn -> SignInStep(state, onSignIn, onForget)
             ServerStage.SecondFactor -> SecondFactorStep(state, onSecondFactor)
             ServerStage.Vault -> VaultStep(onUnlock)
-            ServerStage.Ready -> ReadyStep(state, onSync, onForget)
+            ServerStage.Ready -> {
+                ReadyStep(state, onSync, onForget)
+                GroupsSection(
+                    groups = state.groups,
+                    onCreateGroup = onCreateGroup,
+                    onAddMember = onAddMember,
+                    onShareEvent = onShareEvent,
+                    sharingEventName = sharingEventName,
+                )
+            }
         }
     }
 }

@@ -434,6 +434,8 @@ private fun EventPane(
 @Composable
 private fun ServerPane(
     onBack: () -> Unit,
+    sharingEventId: String? = null,
+    sharingEventName: String? = null,
     viewModel: com.mateof.passvault.ui.server.ServerViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -459,6 +461,12 @@ private fun ServerPane(
             onUnlock = viewModel::unlockVault,
             onSync = viewModel::sync,
             onForget = viewModel::forget,
+            onCreateGroup = viewModel::createGroup,
+            onAddMember = viewModel::addMember,
+            onShareEvent = { groupId ->
+                sharingEventId?.let { viewModel.shareEventWithGroup(it, groupId) }
+            },
+            sharingEventName = sharingEventName,
             modifier = Modifier.padding(padding),
         )
     }

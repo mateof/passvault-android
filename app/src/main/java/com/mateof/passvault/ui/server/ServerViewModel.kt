@@ -127,7 +127,10 @@ class ServerViewModel @Inject constructor(
             _state.value = _state.value.copy(busy = true, failure = null)
             val outcome = withContext(Dispatchers.IO) { runCatching { api.unlockVault(passphrase) } }
             _state.value = outcome.fold(
-                onSuccess = { _state.value.copy(busy = false, stage = ServerStage.Ready) },
+                onSuccess = {
+                    loadGroups()
+                    _state.value.copy(busy = false, stage = ServerStage.Ready)
+                },
                 onFailure = { _state.value.copy(busy = false, failure = describe(it)) },
             )
         }
@@ -189,6 +192,48 @@ class ServerViewModel @Inject constructor(
         }
     }
 
+    /** Loads the groups this account belongs to. Only meaningful once the vault is open. */
+    fun loadGroups() {
+        viewModelScope.launch {
+            val loaded = withContext(Dispatchers.IO) { runCatching { api.groups() } }
+            loaded.onSuccess { _state.value = _state.value.copy(groups = it) }
+        }
+    }
+
+    fun createGroup(name: String) {
+        viewModelScope.launch {
+            val done = withContext(Dispatchers.IO) { runCatching { api.createGroup(name) } }
+            done.fold(
+                onSuccess = { loadGroups() },
+                onFailure = { _state.value = _state.value.copy(failure = describe(it)) },
+            )
+        }
+    }
+
+    fun addMember(groupId: String, email: String) {
+        viewModelScope.launch {
+            val done = withContext(Dispatchers.IO) { runCatching { api.addMember(groupId, email) } }
+            done.fold(
+                onSuccess = { loadGroups() },
+                onFailure = { _state.value = _state.value.copy(failure = describe(it)) },
+            )
+        }
+    }
+
+    /** Gives a group access to an event, which is what a group is for. */
+    fun shareEventWithGroup(eventId: String, groupId: String) {
+        viewModelScope.launch {
+            _state.value = _state.value.copy(busy = true, failure = null)
+            val done = withContext(Dispatchers.IO) {
+                runCatching { api.shareEvent(eventId, "GROUP", groupId) }
+            }
+            _state.value = done.fold(
+                onSuccess = { _state.value.copy(busy = false, sharedWithGroup = true) },
+                onFailure = { _state.value.copy(busy = false, failure = describe(it)) },
+            )
+        }
+    }
+
     fun forget() {
         api.signOutLocally()
         settings.clear()
@@ -224,4 +269,6 @@ data class ServerUiState(
     val failure: String? = null,
     val secondFactorMethods: List<String> = emptyList(),
     val lastSync: SyncSummary? = null,
+    val groups: List<com.mateof.passvault.server.Group> = emptyList(),
+    val sharedWithGroup: Boolean = false,
 )
