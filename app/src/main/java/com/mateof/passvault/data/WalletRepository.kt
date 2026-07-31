@@ -84,9 +84,22 @@ class WalletRepository(
                     startsAt = row.startsAt?.take(10),
                     ticketCount = row.ticketCount,
                     provisionalCount = row.provisionalCount,
+                    icon = row.icon,
+                    colour = row.colour,
                 )
             }
         }
+
+    /**
+     * Changes the mark an event is recognised by.
+     *
+     * A single UPDATE of two plaintext columns rather than a re-save of the row: everything else
+     * on an event is ciphertext, and rewriting it to change a colour would mean decrypting and
+     * re-encrypting a name for no reason at all.
+     */
+    suspend fun setEventMark(eventId: String, icon: String, colour: String) {
+        dao.setEventMark(eventId, icon, colour)
+    }
 
     /** The tickets of one event, decrypted the same way as the wallet list. */
     fun ticketsOf(eventId: String, locale: Locale = Locale.getDefault()): Flow<List<TicketRow>> =

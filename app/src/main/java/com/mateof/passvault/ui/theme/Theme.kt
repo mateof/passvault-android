@@ -19,47 +19,74 @@ import androidx.compose.ui.unit.sp
 /**
  * The visual system.
  *
- * Material 3 with dynamic colour where the platform offers it, so the app takes on the user's
- * wallpaper palette on Android 12 and later. Below that it falls back to a fixed scheme rather than
- * approximating one — a wrong guess at the user's colours looks worse than a deliberate palette.
+ * Material 3 with a palette of its own. Dynamic colour is available and off by default, which is
+ * the opposite of what this file used to do and the reason it was changed: taking the wallpaper
+ * palette made the app *feel* like part of the phone and look like nothing in particular — a
+ * beige wallpaper produced a beige wallet, and the event marks, the one thing that makes a list
+ * of twelve events scannable, came out as twelve shades of the same beige.
  *
- * The seed colours are a deep teal and a warm amber: a ticket wallet is looked at in a queue, often
- * outdoors, so contrast between the card surface and the barcode matters more than subtlety.
+ * So the identity is fixed and the user can opt into theirs. The seed is a deep indigo with a
+ * teal accent, dark enough to hold white text outdoors: a ticket wallet is read in a queue, in
+ * sunlight, by somebody who is already slightly anxious.
  */
-private val Teal = Color(0xFF0F3D3E)
-private val TealLight = Color(0xFF3C6E71)
-private val Amber = Color(0xFFD9A404)
-private val Sand = Color(0xFFF2F7F5)
-private val Ink = Color(0xFF101613)
+private val Indigo = Color(0xFF4B3FD0)
+private val IndigoBright = Color(0xFF9B8CFF)
+private val IndigoDeep = Color(0xFF2E2593)
+private val Teal = Color(0xFF0E9C93)
+private val TealBright = Color(0xFF3FD9CB)
+private val Paper = Color(0xFFF6F5FC)
+private val Ink = Color(0xFF14141C)
 
 private val LightScheme = lightColorScheme(
-    primary = Teal,
-    onPrimary = Sand,
-    primaryContainer = TealLight,
-    onPrimaryContainer = Sand,
-    secondary = Amber,
-    onSecondary = Ink,
-    background = Sand,
+    primary = Indigo,
+    onPrimary = Color.White,
+    primaryContainer = Color(0xFFE4E0FF),
+    onPrimaryContainer = IndigoDeep,
+    secondary = Teal,
+    onSecondary = Color.White,
+    secondaryContainer = Color(0xFFCFF3F0),
+    onSecondaryContainer = Color(0xFF04443F),
+    tertiary = Color(0xFFC2419A),
+    onTertiary = Color.White,
+    background = Paper,
     onBackground = Ink,
     surface = Color.White,
     onSurface = Ink,
-    surfaceVariant = Color(0xFFE3EAE7),
-    onSurfaceVariant = Color(0xFF3F4B46),
+    surfaceContainerLowest = Color.White,
+    surfaceContainerLow = Color(0xFFFBFAFF),
+    surfaceContainer = Color(0xFFF2F1FA),
+    surfaceContainerHigh = Color(0xFFFFFFFF),
+    surfaceContainerHighest = Color(0xFFEDEBF7),
+    surfaceVariant = Color(0xFFE7E5F3),
+    onSurfaceVariant = Color(0xFF56546B),
+    outline = Color(0xFFC9C6DC),
+    outlineVariant = Color(0xFFE2E0EE),
 )
 
 private val DarkScheme = darkColorScheme(
-    primary = TealLight,
-    onPrimary = Ink,
-    primaryContainer = Teal,
-    onPrimaryContainer = Sand,
-    secondary = Amber,
-    onSecondary = Ink,
-    background = Color(0xFF0B0F0D),
-    onBackground = Sand,
-    surface = Color(0xFF141A17),
-    onSurface = Sand,
-    surfaceVariant = Color(0xFF2A322E),
-    onSurfaceVariant = Color(0xFFC3CCC7),
+    primary = IndigoBright,
+    onPrimary = Color(0xFF1B1547),
+    primaryContainer = Color(0xFF322B78),
+    onPrimaryContainer = Color(0xFFE4E0FF),
+    secondary = TealBright,
+    onSecondary = Color(0xFF00322E),
+    secondaryContainer = Color(0xFF0A4B46),
+    onSecondaryContainer = Color(0xFFCFF3F0),
+    tertiary = Color(0xFFE57BC0),
+    onTertiary = Color(0xFF440F33),
+    background = Color(0xFF0E0E15),
+    onBackground = Color(0xFFE9E8F2),
+    surface = Color(0xFF15151F),
+    onSurface = Color(0xFFE9E8F2),
+    surfaceContainerLowest = Color(0xFF0B0B12),
+    surfaceContainerLow = Color(0xFF13131C),
+    surfaceContainer = Color(0xFF191922),
+    surfaceContainerHigh = Color(0xFF1F1F2B),
+    surfaceContainerHighest = Color(0xFF272733),
+    surfaceVariant = Color(0xFF2A2A38),
+    onSurfaceVariant = Color(0xFFB6B4C8),
+    outline = Color(0xFF474557),
+    outlineVariant = Color(0xFF2E2D3C),
 )
 
 /**
@@ -104,6 +131,53 @@ data class StatusColours(
 
 val LocalStatusColours = androidx.compose.runtime.staticCompositionLocalOf { StatusColours() }
 
+/**
+ * The hues an event can be marked with.
+ *
+ * The same eight names the server stores and the web draws, so a mark chosen on a phone survives
+ * a synchronisation and looks the same in a browser. Outside the colour scheme for the same reason
+ * as the status colours: these are how a user recognises their own events, and a hue that follows
+ * the wallpaper cannot be recognised.
+ */
+@Immutable
+data class EventHues(
+    val violet: Color = Color(0xFF7C5CF0),
+    val blue: Color = Color(0xFF2F7AE5),
+    val teal: Color = Color(0xFF0D9488),
+    val green: Color = Color(0xFF3F9142),
+    val amber: Color = Color(0xFFC08A08),
+    val orange: Color = Color(0xFFDD6B20),
+    val red: Color = Color(0xFFD23F57),
+    val pink: Color = Color(0xFFC2419A),
+) {
+    /** By the name the server and the web use. Anything unknown falls back rather than crashing. */
+    fun named(name: String?): Color = when (name) {
+        "violet" -> violet
+        "blue" -> blue
+        "teal" -> teal
+        "green" -> green
+        "amber" -> amber
+        "orange" -> orange
+        "red" -> red
+        "pink" -> pink
+        else -> violet
+    }
+
+    val all: List<Pair<String, Color>>
+        get() = listOf(
+            "violet" to violet,
+            "blue" to blue,
+            "teal" to teal,
+            "green" to green,
+            "amber" to amber,
+            "orange" to orange,
+            "red" to red,
+            "pink" to pink,
+        )
+}
+
+val LocalEventHues = androidx.compose.runtime.staticCompositionLocalOf { EventHues() }
+
 private val PassVaultTypography = Typography().run {
     copy(
         // Tighter and heavier at the top of the scale. A screen title that is merely larger than
@@ -112,6 +186,7 @@ private val PassVaultTypography = Typography().run {
         displaySmall = displaySmall.copy(fontWeight = FontWeight.Bold, letterSpacing = (-0.5).sp),
         headlineLarge = headlineLarge.copy(fontWeight = FontWeight.Bold, letterSpacing = (-0.4).sp),
         headlineMedium = headlineMedium.copy(fontWeight = FontWeight.SemiBold, letterSpacing = (-0.2).sp),
+        headlineSmall = headlineSmall.copy(fontWeight = FontWeight.SemiBold, letterSpacing = (-0.2).sp),
         titleLarge = titleLarge.copy(fontWeight = FontWeight.SemiBold, letterSpacing = 0.sp),
         titleMedium = titleMedium.copy(fontWeight = FontWeight.SemiBold, letterSpacing = 0.sp),
         // Barcode payloads and seat numbers are read by a person comparing them against a screen at
@@ -123,7 +198,15 @@ private val PassVaultTypography = Typography().run {
 @Composable
 fun PassVaultTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
-    dynamicColor: Boolean = true,
+    /**
+     * Off by default, which is a reversal.
+     *
+     * Wallpaper colour is a lovely idea and it cost this application its identity: every surface
+     * became a tint of whatever was behind the home screen, and the marks that tell twelve events
+     * apart became twelve versions of the same one. It remains available for anybody who prefers
+     * their phone to look like one piece.
+     */
+    dynamicColor: Boolean = false,
     content: @Composable () -> Unit,
 ) {
     val context = LocalContext.current

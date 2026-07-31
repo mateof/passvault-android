@@ -11,16 +11,21 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.PhotoCamera
-import androidx.compose.material.icons.filled.Share
-import androidx.compose.material.icons.filled.SystemUpdate
+import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.Palette
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.DrawerValue
+import androidx.compose.material3.ModalNavigationDrawer
+import androidx.compose.material3.rememberDrawerState
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -39,14 +44,19 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.mateof.passvault.ui.Destination
+import com.mateof.passvault.ui.MainDrawerSheet
 import com.mateof.passvault.ui.ingest.IngestReviewScreen
 import com.mateof.passvault.ui.ingest.IngestReviewState
 import com.mateof.passvault.ui.ingest.ReviewRow
@@ -61,6 +71,7 @@ import com.mateof.passvault.ui.wallet.WalletScreen
 import com.mateof.passvault.ui.wallet.WalletUiState
 import com.mateof.passvault.ui.wallet.WalletViewModel
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.launch
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
@@ -258,6 +269,33 @@ private fun PassVaultApp(
         viewModel.consumeOutcome()
     }
 
+    val drawer = rememberDrawerState(DrawerValue.Closed)
+    val scope = rememberCoroutineScope()
+    val destination = when (screen) {
+        Screen.Share -> Destination.Share
+        Screen.Server -> Destination.Server
+        Screen.Updates -> Destination.Updates
+        else -> Destination.Wallet
+    }
+    val openDrawer: () -> Unit = { scope.launch { drawer.open() } }
+    val goTo: (Destination) -> Unit = { chosen ->
+        scope.launch { drawer.close() }
+        viewModel.openEvent(null)
+        screen = when (chosen) {
+            Destination.Wallet -> Screen.Wallet
+            Destination.Share -> Screen.Share
+            Destination.Server -> Screen.Server
+            Destination.Updates -> Screen.Updates
+        }
+    }
+
+    // The gesture is enabled only on the wallet: a drawer that opens from the left edge of a
+    // detail screen fights the system back gesture, and back is what the user means there.
+    ModalNavigationDrawer(
+        drawerState = drawer,
+        gesturesEnabled = screen is Screen.Wallet,
+        drawerContent = { MainDrawerSheet(current = destination, onSelect = goTo) },
+    ) {
     Scaffold(snackbarHost = { SnackbarHost(snackbars) }) { padding ->
         AnimatedContent(
             targetState = screen,
@@ -304,18 +342,24 @@ private fun PassVaultApp(
                     onShare = { screen = Screen.Share },
                     onImport = { pickFile.launch(IMPORTABLE_TYPES) },
                     onCapture = { startCapture() },
-                    onServer = { screen = Screen.Server },
-                    onUpdates = { screen = Screen.Updates },
+                    onMenu = openDrawer,
                 )
                 is Screen.Event -> {
                     openEvent = current.id to current.name
+                    val row = eventsState.events.firstOrNull { it.id == current.id }
                     EventPane(
-                    title = current.name,
-                    tickets = eventTickets,
-                    onBack = { viewModel.openEvent(null); screen = Screen.Wallet },
-                    onTicketClick = { ticketId ->
-                        viewModel.openTicket(ticketId) { detail -> screen = Screen.Ticket(detail) }
-                    },
+                        eventId = current.id,
+                        title = current.name,
+                        icon = row?.icon,
+                        colour = row?.colour,
+                        tickets = eventTickets,
+                        onBack = { viewModel.openEvent(null); screen = Screen.Wallet },
+                        onTicketClick = { ticketId ->
+                            viewModel.openTicket(ticketId) { detail -> screen = Screen.Ticket(detail) }
+                        },
+                        onMarkChosen = { chosenIcon, chosenColour ->
+                            viewModel.setEventMark(current.id, chosenIcon, chosenColour)
+                        },
                     )
                 }
                 is Screen.Ticket -> TicketPane(
@@ -335,6 +379,7 @@ private fun PassVaultApp(
                 Screen.Share -> SharePane(onBack = { screen = Screen.Wallet })
             }
         }
+    }
     }
 
     pendingArchive?.let { bytes ->
@@ -408,8 +453,7 @@ private fun WalletPane(
     onShare: () -> Unit,
     onImport: () -> Unit,
     onCapture: () -> Unit,
-    onServer: () -> Unit,
-    onUpdates: () -> Unit,
+    onMenu: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     // Collapses as the list scrolls, giving the content the whole screen once the user is reading
@@ -434,22 +478,12 @@ private fun WalletPane(
                             contentDescription = stringResource(R.string.action_capture),
                         )
                     }
-                    IconButton(onClick = onShare) {
+                },
+                navigationIcon = {
+                    IconButton(onClick = onMenu) {
                         Icon(
-                            Icons.Filled.Share,
-                            contentDescription = stringResource(R.string.action_share),
-                        )
-                    }
-                    IconButton(onClick = onServer) {
-                        Icon(
-                            Icons.Filled.Cloud,
-                            contentDescription = stringResource(R.string.server_title),
-                        )
-                    }
-                    IconButton(onClick = onUpdates) {
-                        Icon(
-                            Icons.Filled.SystemUpdate,
-                            contentDescription = stringResource(R.string.update_title),
+                            Icons.Filled.Menu,
+                            contentDescription = stringResource(R.string.action_menu),
                         )
                     }
                 },
@@ -471,18 +505,59 @@ private fun WalletPane(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun EventPane(
+    eventId: String,
     title: String,
+    icon: String?,
+    colour: String?,
     tickets: List<com.mateof.passvault.ui.wallet.TicketRow>,
     onBack: () -> Unit,
     onTicketClick: (String) -> Unit,
+    onMarkChosen: (String, String) -> Unit,
 ) {
+    var picking by remember { mutableStateOf(false) }
+
+    if (picking) {
+        com.mateof.passvault.ui.wallet.MarkPickerDialog(
+            eventId = eventId,
+            icon = icon,
+            colour = colour,
+            onDismiss = { picking = false },
+            onChosen = { chosenIcon, chosenColour ->
+                onMarkChosen(chosenIcon, chosenColour)
+                picking = false
+            },
+        )
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(title) },
+                // The mark sits in the title bar, which is also where it is changed from: it is
+                // the one place on this screen where the event is being named rather than its
+                // tickets listed.
+                title = {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        com.mateof.passvault.ui.wallet.EventMark(
+                            eventId = eventId,
+                            icon = icon,
+                            colour = colour,
+                            size = 28.dp,
+                        )
+                        Spacer(Modifier.width(12.dp))
+                        Text(title)
+                    }
+                },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
+                    }
+                },
+                actions = {
+                    IconButton(onClick = { picking = true }) {
+                        Icon(
+                            Icons.Filled.Palette,
+                            contentDescription = stringResource(R.string.event_mark_title),
+                        )
                     }
                 },
             )

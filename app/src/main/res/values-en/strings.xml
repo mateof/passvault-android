@@ -133,4 +133,9 @@
     <string name="update_refused_package">The downloaded file belongs to another application. It will not be installed.</string>
     <string name="update_refused_signer">The downloaded file is not signed with the same key as this installation. It will not be installed.</string>
     <string name="update_refused_unreadable">The downloaded file could not be read as an Android application. It will not be installed.</string>
+    <string name="action_menu">Menu</string>
+    <string name="action_save">Save</string>
+    <string name="event_mark_title">Event icon</string>
+    <string name="event_mark_icon">Icon</string>
+    <string name="event_mark_colour">Colour</string>
 </resources>

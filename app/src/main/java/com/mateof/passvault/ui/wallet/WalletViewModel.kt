@@ -163,6 +163,11 @@ class WalletViewModel @Inject constructor(
         _openEvent.value = eventId
     }
 
+    /** Records the icon and colour somebody chose for an event. */
+    fun setEventMark(eventId: String, icon: String, colour: String) {
+        viewModelScope.launch { repository.setEventMark(eventId, icon, colour) }
+    }
+
     private val _events = MutableStateFlow<ImportOutcome?>(null)
     val importOutcome: StateFlow<ImportOutcome?> = _events.asStateFlow()
 

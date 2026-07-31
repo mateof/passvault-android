@@ -133,4 +133,9 @@
     <string name="update_refused_package">El archivo descargado es de otra aplicación. No se instala.</string>
     <string name="update_refused_signer">El archivo descargado no está firmado con la misma clave que esta instalación. No se instala.</string>
     <string name="update_refused_unreadable">No se ha podido leer el archivo descargado como una aplicación de Android. No se instala.</string>
+    <string name="action_menu">Menú</string>
+    <string name="action_save">Guardar</string>
+    <string name="event_mark_title">Icono del evento</string>
+    <string name="event_mark_icon">Icono</string>
+    <string name="event_mark_colour">Color</string>
 </resources>

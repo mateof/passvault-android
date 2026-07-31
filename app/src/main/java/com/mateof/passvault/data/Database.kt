@@ -34,6 +34,11 @@ data class EventEntity(
     @ColumnInfo(name = "starts_at") val startsAt: String?,
     @ColumnInfo(name = "default_assignment_mode") val defaultAssignmentMode: String,
     @ColumnInfo(name = "password_protected") val passwordProtected: Int,
+    // The mark this event is recognised by, in the clear. A category and a colour are not the
+    // ticket data — encrypting them would mean a wallet that cannot draw its own list until
+    // every event is decrypted, which is the problem the mark exists to solve.
+    @ColumnInfo(name = "icon") val icon: String? = null,
+    @ColumnInfo(name = "colour") val colour: String? = null,
     @ColumnInfo(name = "created_at") val createdAt: String,
 ) {
     override fun equals(other: Any?) = other is EventEntity && id == other.id
@@ -82,6 +87,8 @@ data class EventWithCount(
     @ColumnInfo(name = "name_cipher") val nameCipher: ByteArray,
     @ColumnInfo(name = "venue_cipher") val venueCipher: ByteArray?,
     @ColumnInfo(name = "starts_at") val startsAt: String?,
+    @ColumnInfo(name = "icon") val icon: String?,
+    @ColumnInfo(name = "colour") val colour: String?,
     @ColumnInfo(name = "ticket_count") val ticketCount: Int,
     @ColumnInfo(name = "provisional_count") val provisionalCount: Int,
 )
@@ -136,8 +143,11 @@ interface WalletDao {
      * Ordered by when the event starts, undated last: a ticket for tonight matters more than one
      * with no date, and SQLite sorts NULL first, which would put every undated event at the top.
      */
+    @Query("UPDATE events SET icon = :icon, colour = :colour WHERE id = :eventId")
+    suspend fun setEventMark(eventId: String, icon: String?, colour: String?)
+
     @Query(
-        "SELECT e.id, e.name_cipher, e.venue_cipher, e.starts_at, " +
+        "SELECT e.id, e.name_cipher, e.venue_cipher, e.starts_at, e.icon, e.colour, " +
             "COUNT(t.id) AS ticket_count, " +
             "SUM(CASE WHEN t.assignment_state = 'PROVISIONAL' THEN 1 ELSE 0 END) AS provisional_count " +
             "FROM events e LEFT JOIN tickets t ON t.event_id = e.id " +
@@ -180,7 +190,7 @@ data class TicketWithBarcode(
         DeviceEntity::class,
         DocumentEntity::class,
     ],
-    version = 3,
+    version = 4,
     exportSchema = false,
 )
 abstract class PassVaultDatabase : RoomDatabase() {
@@ -189,6 +199,25 @@ abstract class PassVaultDatabase : RoomDatabase() {
     abstract fun operationDao(): OperationDao
 
     abstract fun documentDao(): DocumentDao
+}
+
+/**
+ * Version 4 gives an event a mark: an icon and a colour.
+ *
+ * Two nullable text columns and nothing else. Null is the honest value for every event that
+ * already existed — nobody chose anything for them — and the interface derives a mark from the
+ * identifier in that case, so an old wallet is colourful immediately without anybody being asked
+ * to sit down and label twelve events before it looks like anything.
+ *
+ * In the clear, like `starts_at` beside them. A category and a colour are not what a ticket is
+ * worth, and encrypting them would mean a list that cannot be drawn until every event key is
+ * open — which is the state the mark exists to fix.
+ */
+val MIGRATION_3_4 = object : Migration(3, 4) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE events ADD COLUMN icon TEXT")
+        db.execSQL("ALTER TABLE events ADD COLUMN colour TEXT")
+    }
 }
 
 /**

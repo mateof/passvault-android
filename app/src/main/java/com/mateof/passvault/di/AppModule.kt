@@ -24,6 +24,7 @@ object AppModule {
             .addMigrations(
                 com.mateof.passvault.data.MIGRATION_1_2,
                 com.mateof.passvault.data.MIGRATION_2_3,
+                com.mateof.passvault.data.MIGRATION_3_4,
             )
             // No destructive fallback. A wallet is the only copy of tickets somebody paid for, and
             // wiping it on a schema change would be the worst possible way to handle an upgrade —

@@ -139,4 +139,9 @@
     <string name="update_refused_package">O ficheiro descargado é doutra aplicación. Non se instala.</string>
     <string name="update_refused_signer">O ficheiro descargado non está asinado coa mesma chave ca esta instalación. Non se instala.</string>
     <string name="update_refused_unreadable">Non se puido ler o ficheiro descargado como unha aplicación de Android. Non se instala.</string>
+    <string name="action_menu">Menú</string>
+    <string name="action_save">Gardar</string>
+    <string name="event_mark_title">Icona do evento</string>
+    <string name="event_mark_icon">Icona</string>
+    <string name="event_mark_colour">Cor</string>
 </resources>

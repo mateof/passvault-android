@@ -2,8 +2,6 @@ package com.mateof.passvault.ui.wallet
 
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
@@ -18,8 +16,14 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.CalendarToday
+import androidx.compose.material.icons.filled.ConfirmationNumber
+import androidx.compose.material.icons.filled.Place
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -29,6 +33,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
@@ -45,10 +50,11 @@ import com.mateof.passvault.ui.theme.Motion
  * with no grouping is a list nobody can read, and it makes the thing you actually share — an event,
  * with everybody's tickets in it — impossible to name on screen.
  *
- * Each row says how many tickets are inside and, when it applies, how many are still waiting to be
- * confirmed. That second number is the one worth surfacing at the top level: a provisional claim is
- * not settled, and finding that out at the gate is the failure the whole offline design exists to
- * prevent.
+ * Each row leads with its mark, because that is what the eye finds before it reads anything. Then
+ * the name, then where and when with an icon each, then how many tickets are inside and — when it
+ * applies — how many are still waiting to be confirmed. That last number is the one worth
+ * surfacing at the top level: a provisional claim is not settled, and finding that out at the gate
+ * is the failure the whole offline design exists to prevent.
  */
 @Immutable
 data class EventRow(
@@ -58,6 +64,9 @@ data class EventRow(
     val startsAt: String?,
     val ticketCount: Int,
     val provisionalCount: Int,
+    /** Null until somebody chooses one; the mark is then derived from the identifier. */
+    val icon: String? = null,
+    val colour: String? = null,
 )
 
 @Immutable
@@ -114,67 +123,97 @@ private fun EventCard(event: EventRow, onClick: (String) -> Unit) {
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
         ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp, pressedElevation = 0.dp),
+        // Raised, and further when pressed. A flat card on a tinted background reads as a panel;
+        // one that lifts under a finger reads as an object, which is what a ticket stands for.
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp, pressedElevation = 8.dp),
     ) {
-        Column(
-            modifier = Modifier.padding(spacing.large),
-            verticalArrangement = Arrangement.spacedBy(spacing.tight),
+        Row(
+            modifier = Modifier.padding(spacing.medium),
+            horizontalArrangement = Arrangement.spacedBy(spacing.medium),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(
-                text = event.name,
-                style = MaterialTheme.typography.headlineSmall,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
+            EventMark(eventId = event.id, icon = event.icon, colour = event.colour)
 
-            listOfNotNull(event.startsAt, event.venue)
-                .takeIf { it.isNotEmpty() }
-                ?.let { parts ->
-                    Text(
-                        text = parts.joinToString(" · "),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
-
-            Row(
-                modifier = Modifier.padding(top = spacing.small),
-                horizontalArrangement = Arrangement.spacedBy(spacing.small),
-                verticalAlignment = Alignment.CenterVertically,
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(spacing.tight),
             ) {
                 Text(
-                    text = pluralStringResource(
-                        R.plurals.event_ticket_count,
-                        event.ticketCount,
-                        event.ticketCount,
-                    ),
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    text = event.name,
+                    style = MaterialTheme.typography.titleLarge,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
                 )
 
-                if (event.provisionalCount > 0) {
-                    // Surfaced at the top level, not only inside. A claim made offline is not
-                    // settled, and the whole point of the design is that the app says so before
-                    // somebody is standing at a turnstile.
-                    Box(
-                        modifier = Modifier
-                            .size(8.dp)
-                            .background(status.provisional, CircleShape),
-                    )
-                    Text(
+                event.startsAt?.let { MetaRow(Icons.Filled.CalendarToday, it) }
+                event.venue?.let { MetaRow(Icons.Filled.Place, it) }
+
+                Row(
+                    modifier = Modifier.padding(top = spacing.hairline),
+                    horizontalArrangement = Arrangement.spacedBy(spacing.small),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    MetaRow(
+                        icon = Icons.Filled.ConfirmationNumber,
                         text = pluralStringResource(
-                            R.plurals.event_provisional_count,
-                            event.provisionalCount,
-                            event.provisionalCount,
+                            R.plurals.event_ticket_count,
+                            event.ticketCount,
+                            event.ticketCount,
                         ),
-                        style = MaterialTheme.typography.labelLarge,
-                        color = status.provisional,
                     )
+
+                    if (event.provisionalCount > 0) {
+                        // Surfaced at the top level, not only inside. A claim made offline is not
+                        // settled, and the whole point of the design is that the app says so before
+                        // somebody is standing at a turnstile.
+                        Box(
+                            modifier = Modifier
+                                .size(8.dp)
+                                .background(status.provisional, CircleShape),
+                        )
+                        Text(
+                            text = pluralStringResource(
+                                R.plurals.event_provisional_count,
+                                event.provisionalCount,
+                                event.provisionalCount,
+                            ),
+                            style = MaterialTheme.typography.labelLarge,
+                            color = status.provisional,
+                        )
+                    }
                 }
             }
+
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
+    }
+}
+
+/** A line of secondary information, with the icon that says which kind it is. */
+@Composable
+private fun MetaRow(icon: ImageVector, text: String) {
+    val spacing = LocalSpacing.current
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(spacing.tight),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(14.dp),
+        )
+        Text(
+            text = text,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }
 
