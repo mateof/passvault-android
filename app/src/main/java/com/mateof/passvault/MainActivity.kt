@@ -70,8 +70,7 @@ import com.mateof.passvault.ui.share.ShareScreen
 import com.mateof.passvault.ui.share.ShareViewModel
 import com.mateof.passvault.ui.theme.Motion
 import com.mateof.passvault.ui.theme.PassVaultTheme
-import com.mateof.passvault.ui.ticket.TicketDetail
-import com.mateof.passvault.ui.ticket.TicketDetailScreen
+import com.mateof.passvault.ui.ticket.TicketPager
 import com.mateof.passvault.ui.wallet.ImportOutcome
 import com.mateof.passvault.ui.wallet.WalletScreen
 import com.mateof.passvault.ui.wallet.WalletUiState
@@ -127,7 +126,14 @@ private val IMPORTABLE_TYPES = arrayOf(
 private sealed interface Screen {
     data object Wallet : Screen
     data class Event(val id: String, val name: String) : Screen
-    data class Ticket(val detail: TicketDetail) : Screen
+    /**
+     * Which ticket to open on, rather than the ticket itself.
+     *
+     * Carrying the decrypted detail meant the screen could only ever show the one it was opened
+     * with. Moving to the next needs the event's whole list and the ability to load any of it,
+     * which is the pager's job — so the route carries only where to start.
+     */
+    data class Ticket(val ticketId: String) : Screen
     data class Share(val scope: ShareScope) : Screen
     data class Document(val eventId: String) : Screen
     data object Server : Screen
@@ -389,9 +395,9 @@ private fun PassVaultApp(
                         tickets = eventTickets,
                         documents = eventDocuments,
                         onBack = { viewModel.openEvent(null); screen = Screen.Wallet },
-                        onTicketClick = { ticketId ->
-                            viewModel.openTicket(ticketId) { detail -> screen = Screen.Ticket(detail) }
-                        },
+                        // Straight to the screen. It used to decrypt the ticket first and pass
+                        // the result in, so a tap did nothing visible until the decrypt finished.
+                        onTicketClick = { ticketId -> screen = Screen.Ticket(ticketId) },
                         onOpenDocument = { documentId ->
                             viewModel.openDocument(documentId)
                             documentOrigin = current
@@ -414,14 +420,19 @@ private fun PassVaultApp(
                         },
                     )
                 }
-                is Screen.Ticket -> TicketPane(
-                    detail = current.detail,
+                is Screen.Ticket -> TicketPager(
+                    ticketId = current.ticketId,
+                    tickets = eventTickets,
+                    load = viewModel::loadTicket,
                     onBack = backToEvent,
-                    onOpenDocument = {
+                    onOpenDocument = { shown ->
                         eventDocuments.firstOrNull()?.let { document ->
                             viewModel.openDocument(document.id)
-                            documentOrigin = current
-                            screen = Screen.Document(current.detail.eventId)
+                            // The ticket on screen, not the one this was opened on: they differ
+                            // once somebody has swiped, and coming back to the wrong one undoes
+                            // the swiping they just did.
+                            documentOrigin = Screen.Ticket(shown)
+                            screen = Screen.Document(openEvent?.first.orEmpty())
                         }
                     },
                 )
@@ -808,25 +819,6 @@ private fun DocumentPane(
         },
     ) { padding ->
         com.mateof.passvault.ui.document.DocumentScreen(state, Modifier.padding(padding))
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun TicketPane(detail: TicketDetail, onBack: () -> Unit, onOpenDocument: () -> Unit) {
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text(detail.eventName) },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
-                    }
-                },
-            )
-        },
-    ) { padding ->
-        TicketDetailScreen(detail, onOpenDocument, Modifier.padding(padding))
     }
 }
 

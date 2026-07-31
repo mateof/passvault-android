@@ -273,19 +273,17 @@ class WalletViewModel @Inject constructor(
     }
 
     /**
-     * Loads one ticket and hands it back.
+     * Loads one ticket.
      *
      * Off the main thread, because this is where the barcode is decrypted — the one field the list
      * deliberately never touches.
+     *
+     * Suspending rather than taking a callback, which is what the ticket pager needs: each page
+     * loads its own ticket as it is composed, and Compose composes the pages either side of the
+     * current one, so the next ticket is already decrypted before a finger reaches it.
      */
-    fun openTicket(ticketId: String, onLoaded: (com.mateof.passvault.ui.ticket.TicketDetail) -> Unit) {
-        viewModelScope.launch {
-            val detail = withContext(Dispatchers.Default) { repository.detail(ticketId) }
-            if (detail != null) {
-                onLoaded(detail)
-            }
-        }
-    }
+    suspend fun loadTicket(ticketId: String): com.mateof.passvault.ui.ticket.TicketDetail? =
+        withContext(Dispatchers.Default) { repository.detail(ticketId) }
 
     private val _document = MutableStateFlow(com.mateof.passvault.ui.document.DocumentViewState())
     val document: StateFlow<com.mateof.passvault.ui.document.DocumentViewState> =

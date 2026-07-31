@@ -20,7 +20,7 @@ android {
         // Raised by CI from the run number. Bumping it by hand is the usual
         // reason an update refuses to install.
         versionCode = (System.getenv("VERSION_CODE") ?: "1").toInt()
-        versionName = "0.8.1"
+        versionName = "0.8.2"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         resourceConfigurations += listOf("gl", "es", "en")
@@ -149,6 +149,13 @@ dependencies {
     testImplementation(libs.robolectric)
     testImplementation(libs.room.testing)
     testImplementation(libs.androidx.test.core)
+    // Compose under Robolectric. The bill of materials has to be repeated for the test
+    // configuration or these two resolve with no version at all and the build fails.
+    testImplementation(platform(libs.compose.bom))
+    testImplementation(libs.compose.ui.test.junit4)
+    // Supplies the empty activity the test rule hosts composables in. Debug rather than test,
+    // because it is a manifest that has to be merged into the one under test.
+    debugImplementation(libs.compose.ui.test.manifest)
 
     androidTestImplementation(libs.androidx.test.junit)
     androidTestImplementation(libs.espresso.core)

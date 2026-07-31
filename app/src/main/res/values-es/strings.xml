@@ -64,6 +64,7 @@
     <string name="document_loading">Abriendo el documento…</string>
     <string name="document_unreadable">No se ha podido abrir el documento guardado.</string>
     <string name="document_page">Página %1$d</string>
+    <string name="ticket_position">%1$d de %2$d</string>
     <string name="action_open_document">Ver el documento original</string>
     <string name="server_title">Conectar con un servidor</string>
     <string name="server_optional">No hace falta ninguno. La cartera, la ingesta, los archivos .tkpak y pasar entradas a otro móvil en la misma wifi funcionan sin servidor. Un servidor añade un sitio donde el registro se encuentra con dispositivos que no están en la sala, y una autoridad que puede resolver una reclamación disputada.</string>
