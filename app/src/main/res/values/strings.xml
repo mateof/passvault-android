@@ -119,4 +119,7 @@
         <item quantity="one">%1$d persoa</item>
         <item quantity="other">%1$d persoas</item>
     </plurals>
+    <string name="server_passkey_sign_in">Entrar cunha chave de acceso</string>
+    <string name="server_passkey_add">Engadir unha chave de acceso</string>
+    <string name="server_passkey_added">Chave de acceso engadida. A próxima vez podes entrar sen contrasinal.</string>
 </resources>

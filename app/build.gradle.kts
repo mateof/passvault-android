@@ -20,7 +20,7 @@ android {
         // Raised by CI from the run number. Bumping it by hand is the usual
         // reason an update refuses to install.
         versionCode = (System.getenv("VERSION_CODE") ?: "1").toInt()
-        versionName = "0.3.0"
+        versionName = "0.4.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         resourceConfigurations += listOf("gl", "es", "en")
@@ -117,6 +117,10 @@ dependencies {
 
     implementation(libs.security.crypto)
     implementation(libs.biometric)
+    implementation(libs.credentials)
+    // The Play Services provider. A passkey can be stored by Google Password Manager or by a
+    // hardware key; without this only the latter is offered, which on most phones means none.
+    implementation(libs.credentials.play.services)
     implementation(libs.datastore.preferences)
 
     implementation(libs.kotlinx.serialization.json)

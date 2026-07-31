@@ -439,6 +439,10 @@ private fun ServerPane(
     viewModel: com.mateof.passvault.ui.server.ServerViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+    // Built from the activity context, because the credential sheet is a system dialog that
+    // has to attach to a window rather than to the application.
+    val passkeys = remember(context) { com.mateof.passvault.server.Passkeys(context) }
 
     Scaffold(
         topBar = {
@@ -466,6 +470,8 @@ private fun ServerPane(
             onShareEvent = { groupId ->
                 sharingEventId?.let { viewModel.shareEventWithGroup(it, groupId) }
             },
+            onPasskeySignIn = { viewModel.signInWithPasskey(passkeys) },
+            onAddPasskey = { viewModel.addPasskey(passkeys, android.os.Build.MODEL ?: "Android") },
             sharingEventName = sharingEventName,
             modifier = Modifier.padding(padding),
         )

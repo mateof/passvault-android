@@ -10,6 +10,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -51,6 +52,8 @@ fun ServerScreen(
     onCreateGroup: (String) -> Unit,
     onAddMember: (String, String) -> Unit,
     onShareEvent: (String) -> Unit,
+    onPasskeySignIn: () -> Unit,
+    onAddPasskey: () -> Unit,
     sharingEventName: String? = null,
     modifier: Modifier = Modifier,
 ) {
@@ -77,11 +80,11 @@ fun ServerScreen(
 
         when (state.stage) {
             ServerStage.Address -> AddressStep(state, onAddressChange, onConnect)
-            ServerStage.SignIn -> SignInStep(state, onSignIn, onForget)
+            ServerStage.SignIn -> SignInStep(state, onSignIn, onForget, onPasskeySignIn)
             ServerStage.SecondFactor -> SecondFactorStep(state, onSecondFactor)
             ServerStage.Vault -> VaultStep(onUnlock)
             ServerStage.Ready -> {
-                ReadyStep(state, onSync, onForget)
+                ReadyStep(state, onSync, onForget, onAddPasskey)
                 GroupsSection(
                     groups = state.groups,
                     onCreateGroup = onCreateGroup,
@@ -128,7 +131,12 @@ private fun AddressStep(
 }
 
 @Composable
-private fun SignInStep(state: ServerUiState, onSignIn: (String, String) -> Unit, onForget: () -> Unit) {
+private fun SignInStep(
+    state: ServerUiState,
+    onSignIn: (String, String) -> Unit,
+    onForget: () -> Unit,
+    onPasskeySignIn: () -> Unit,
+) {
     var email by rememberSaveable { mutableStateOf("") }
     var password by rememberSaveable { mutableStateOf("") }
 
@@ -155,6 +163,11 @@ private fun SignInStep(state: ServerUiState, onSignIn: (String, String) -> Unit,
         modifier = Modifier.fillMaxWidth(),
     ) {
         Text(stringResource(R.string.server_sign_in))
+    }
+    // Offered above "forget", because it is the thing most people will want on a phone they
+    // have signed in on before — no password to type and nothing to phish.
+    OutlinedButton(onClick = onPasskeySignIn, modifier = Modifier.fillMaxWidth()) {
+        Text(stringResource(R.string.server_passkey_sign_in))
     }
     TextButton(onClick = onForget) { Text(stringResource(R.string.server_forget)) }
 }
@@ -220,7 +233,12 @@ private fun VaultStep(onUnlock: (String) -> Unit) {
 }
 
 @Composable
-private fun ReadyStep(state: ServerUiState, onSync: () -> Unit, onForget: () -> Unit) {
+private fun ReadyStep(
+    state: ServerUiState,
+    onSync: () -> Unit,
+    onForget: () -> Unit,
+    onAddPasskey: () -> Unit,
+) {
     Text(state.address, style = MaterialTheme.typography.titleMedium)
     Text(
         text = stringResource(R.string.server_ready),
@@ -230,6 +248,16 @@ private fun ReadyStep(state: ServerUiState, onSync: () -> Unit, onForget: () -> 
 
     Button(onClick = onSync, enabled = !state.busy, modifier = Modifier.fillMaxWidth()) {
         Text(stringResource(R.string.server_sync))
+    }
+
+    OutlinedButton(onClick = onAddPasskey, modifier = Modifier.fillMaxWidth()) {
+        Text(stringResource(R.string.server_passkey_add))
+    }
+    if (state.passkeyAdded) {
+        Text(
+            text = stringResource(R.string.server_passkey_added),
+            style = MaterialTheme.typography.bodyMedium,
+        )
     }
 
     state.lastSync?.let { summary ->

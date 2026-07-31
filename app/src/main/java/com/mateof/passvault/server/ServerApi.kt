@@ -227,6 +227,37 @@ class ServerApi(private val settings: ServerSettings) {
         )
     }
 
+    // --- Passkeys -----------------------------------------------------------------------
+    //
+    // The options and the response are passed through as JSON. WebAuthn's shapes are defined by
+    // the specification and understood by both the platform and the server; a third model here
+    // would be a third opinion about a format that already has two agreeing ones.
+
+    fun passkeyLoginOptions(): String = call("/api/v1/passkeys/login/options", JsonObject(emptyMap())).toString()
+
+    fun passkeyLogin(responseJson: String): SignInOutcome {
+        val response = Json.parseToJsonElement(responseJson)
+        val result = call(
+            "/api/v1/passkeys/login",
+            buildJsonObject { put("response", response) },
+        )
+        return outcomeOf(result)
+    }
+
+    fun passkeyRegisterOptions(): String =
+        call("/api/v1/passkeys/register/options", JsonObject(emptyMap())).toString()
+
+    fun passkeyRegister(responseJson: String, name: String) {
+        val response = Json.parseToJsonElement(responseJson)
+        call(
+            "/api/v1/passkeys/register",
+            buildJsonObject {
+                put("response", response)
+                put("name", name)
+            },
+        )
+    }
+
     private fun JsonObject.text(key: String): String? =
         this[key]?.jsonPrimitive?.let { if (it.isString) it.content else null }
 

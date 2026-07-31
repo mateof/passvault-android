@@ -234,6 +234,61 @@ class ServerViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Signs in with a passkey.
+     *
+     * The platform's sheet does the whole ceremony, so there is no password to type and nothing
+     * for this code to hold. A dismissal is not an error: choosing not to use a passkey is a
+     * decision, and putting a red message on screen for it would be wrong.
+     */
+    fun signInWithPasskey(passkeys: com.mateof.passvault.server.Passkeys) {
+        viewModelScope.launch {
+            _state.value = _state.value.copy(busy = true, failure = null)
+            val outcome = runCatching {
+                val options = withContext(Dispatchers.IO) { api.passkeyLoginOptions() }
+                val response = passkeys.authenticate(options) ?: return@runCatching null
+                withContext(Dispatchers.IO) { api.passkeyLogin(response) }
+            }
+            _state.value = outcome.fold(
+                onSuccess = { result ->
+                    when (result) {
+                        null -> _state.value.copy(busy = false)
+                        is SignInOutcome.SignedIn -> _state.value.copy(
+                            busy = false,
+                            stage = ServerStage.Vault,
+                        )
+                        is SignInOutcome.SecondFactorNeeded -> {
+                            challenge = result.challenge
+                            _state.value.copy(
+                                busy = false,
+                                stage = ServerStage.SecondFactor,
+                                secondFactorMethods = result.methods,
+                            )
+                        }
+                    }
+                },
+                onFailure = { _state.value.copy(busy = false, failure = describe(it)) },
+            )
+        }
+    }
+
+    /** Adds a passkey to the signed-in account, so the next sign-in needs no password. */
+    fun addPasskey(passkeys: com.mateof.passvault.server.Passkeys, name: String) {
+        viewModelScope.launch {
+            _state.value = _state.value.copy(busy = true, failure = null)
+            val outcome = runCatching {
+                val options = withContext(Dispatchers.IO) { api.passkeyRegisterOptions() }
+                val response = passkeys.register(options) ?: return@runCatching false
+                withContext(Dispatchers.IO) { api.passkeyRegister(response, name) }
+                true
+            }
+            _state.value = outcome.fold(
+                onSuccess = { added -> _state.value.copy(busy = false, passkeyAdded = added) },
+                onFailure = { _state.value.copy(busy = false, failure = describe(it)) },
+            )
+        }
+    }
+
     fun forget() {
         api.signOutLocally()
         settings.clear()
@@ -271,4 +326,5 @@ data class ServerUiState(
     val lastSync: SyncSummary? = null,
     val groups: List<com.mateof.passvault.server.Group> = emptyList(),
     val sharedWithGroup: Boolean = false,
+    val passkeyAdded: Boolean = false,
 )

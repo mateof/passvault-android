@@ -113,4 +113,7 @@
         <item quantity="one">%1$d persona</item>
         <item quantity="other">%1$d personas</item>
     </plurals>
+    <string name="server_passkey_sign_in">Entrar con una llave de acceso</string>
+    <string name="server_passkey_add">Añadir una llave de acceso</string>
+    <string name="server_passkey_added">Llave de acceso añadida. La próxima vez puedes entrar sin contraseña.</string>
 </resources>
