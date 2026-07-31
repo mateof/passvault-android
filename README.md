@@ -23,6 +23,8 @@ about how the app behaves when there is no signal.
   account, no server, no signup.
 - **Transfer directly** to another phone on the same Wi-Fi, with no internet at all.
 - **Assign** tickets to people, or let them claim one each, and record who has paid.
+- **Update itself** from its own GitHub releases, verifying that what it downloaded
+  is signed with the same key as the copy already installed.
 
 ## What it cannot do, stated plainly
 
@@ -129,6 +131,37 @@ after a full build.
 
 **Keep the keystore and its password.** Android refuses an update signed with a
 different key, so losing them means never updating the installed app again.
+
+Each release also carries a `.sha256` beside the APK, which is what the in-app
+updater checks a download against.
+
+## Updating from inside the app
+
+There is no store to update through, so the app checks its own releases page. The
+update screen — the icon beside the cloud in the wallet — reports the installed
+version, asks GitHub for the newest one, and compares the two by tag.
+
+Downloading is a separate press from checking: the APK is several megabytes and
+nobody on mobile data should pay for it because they were curious what changed.
+
+Three checks run on the downloaded file before the package installer sees it, and
+only the third really protects:
+
+1. **the digest** published beside the APK, which catches a truncated download;
+2. **the package name**, which must be this application's — an APK for another
+   package would install a second, unrelated app rather than updating anything;
+3. **the signing certificate**, which must be the one the installed app carries.
+
+Android enforces the third itself and would refuse the install anyway. Checking
+first means the user reads a sentence explaining what is wrong instead of watching
+a system dialog fail with nothing in it.
+
+The install is never silent. Android shows its own confirmation for any app
+installing an app, and that is the right place for the decision: something able to
+replace itself unseen would be worse than the tap it saves.
+
+A debug build says so and stops before downloading. It carries the `.debug`
+package name and the debug key, so a published release could never replace it.
 
 ## Languages
 

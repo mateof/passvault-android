@@ -18,6 +18,7 @@ import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -113,6 +114,7 @@ private sealed interface Screen {
     data object Share : Screen
     data class Document(val eventId: String) : Screen
     data object Server : Screen
+    data object Updates : Screen
 }
 
 @Composable
@@ -146,7 +148,10 @@ private fun PassVaultApp(
         screen = if (event != null) Screen.Event(event.first, event.second) else Screen.Wallet
     }
     BackHandler(
-        enabled = screen is Screen.Event || screen is Screen.Document || screen is Screen.Server,
+        enabled = screen is Screen.Event ||
+            screen is Screen.Document ||
+            screen is Screen.Server ||
+            screen is Screen.Updates,
     ) {
         viewModel.openEvent(null)
         screen = Screen.Wallet
@@ -300,6 +305,7 @@ private fun PassVaultApp(
                     onImport = { pickFile.launch(IMPORTABLE_TYPES) },
                     onCapture = { startCapture() },
                     onServer = { screen = Screen.Server },
+                    onUpdates = { screen = Screen.Updates },
                 )
                 is Screen.Event -> {
                     openEvent = current.id to current.name
@@ -321,6 +327,7 @@ private fun PassVaultApp(
                     },
                 )
                 Screen.Server -> ServerPane(onBack = { screen = Screen.Wallet })
+                Screen.Updates -> UpdatePane(onBack = { screen = Screen.Wallet })
                 is Screen.Document -> DocumentPane(
                     state = documentState,
                     onBack = { screen = Screen.Wallet },
@@ -341,6 +348,58 @@ private fun PassVaultApp(
     }
 }
 
+/**
+ * Updating the app from its own releases.
+ *
+ * The check runs when the screen opens, because somebody who navigated here came to ask that
+ * question and making them press a button to ask it again is asking twice. The download does not:
+ * it is several megabytes and belongs to a decision the user makes after reading what changed.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun UpdatePane(
+    onBack: () -> Unit,
+    viewModel: com.mateof.passvault.ui.update.UpdateViewModel = hiltViewModel(),
+) {
+    val state by viewModel.state.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+
+    LaunchedEffect(Unit) {
+        viewModel.collectInstallResult()
+        viewModel.check()
+    }
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text(stringResource(R.string.update_title)) },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
+                    }
+                },
+            )
+        },
+    ) { padding ->
+        com.mateof.passvault.ui.update.UpdateScreen(
+            state = state,
+            onCheck = viewModel::check,
+            onDownload = viewModel::download,
+            onInstall = viewModel::install,
+            onGrantPermission = {
+                context.startActivity(
+                    viewModel.permissionSettings().addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                )
+            },
+            // Read on each recomposition rather than held: the user may be coming back from
+            // Settings having just granted it, and a remembered `false` would keep the screen
+            // asking for something they have already done.
+            mayInstall = viewModel.mayInstall(),
+            modifier = Modifier.padding(padding),
+        )
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun WalletPane(
@@ -350,6 +409,7 @@ private fun WalletPane(
     onImport: () -> Unit,
     onCapture: () -> Unit,
     onServer: () -> Unit,
+    onUpdates: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     // Collapses as the list scrolls, giving the content the whole screen once the user is reading
@@ -384,6 +444,12 @@ private fun WalletPane(
                         Icon(
                             Icons.Filled.Cloud,
                             contentDescription = stringResource(R.string.server_title),
+                        )
+                    }
+                    IconButton(onClick = onUpdates) {
+                        Icon(
+                            Icons.Filled.SystemUpdate,
+                            contentDescription = stringResource(R.string.update_title),
                         )
                     }
                 },

@@ -15,6 +15,11 @@
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.USE_BIOMETRIC" />
 
+    <!-- Updating the app from its own GitHub releases. Declaring this is not enough on its
+         own: since Android 8 the user grants it per application in Settings, and the update
+         screen sends them there rather than failing silently at the last step. -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+
     <uses-feature android:name="android.hardware.camera" android:required="false" />
 
     <application
@@ -53,6 +58,16 @@
                 <data android:mimeType="application/octet-stream" />
             </intent-filter>
         </activity>
+
+        <!-- What the package installer reports back about a commit. Not exported: the only
+             sender is this application's own session, through an explicit PendingIntent. -->
+        <receiver
+            android:name=".update.InstallResultReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.mateof.passvault.INSTALL_RESULT" />
+            </intent-filter>
+        </receiver>
 
         <!-- The camera hands its picture back by writing to a URI, and the URI has to belong
              to this app. Without a provider there is nowhere for a full-resolution photo to

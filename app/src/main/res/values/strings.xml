@@ -122,4 +122,21 @@
     <string name="server_passkey_sign_in">Entrar cunha chave de acceso</string>
     <string name="server_passkey_add">Engadir unha chave de acceso</string>
     <string name="server_passkey_added">Chave de acceso engadida. A próxima vez podes entrar sen contrasinal.</string>
+    <string name="update_title">Actualizacións</string>
+    <string name="update_installed">Versión instalada: %1$s</string>
+    <string name="update_explain">Búscanse na páxina de publicacións de PassVault en GitHub. Antes de instalar nada compróbase que o ficheiro está asinado coa mesma chave ca esta instalación: se non o está, o sistema rexeitaríao igual, pero así sabes por que.</string>
+    <string name="update_check">Buscar actualizacións</string>
+    <string name="update_up_to_date">Xa tes a versión máis recente.</string>
+    <string name="update_available">Hai unha versión nova: %1$s</string>
+    <string name="update_size">Descarga de %1$d MB.</string>
+    <string name="update_download">Descargar</string>
+    <string name="update_install">Instalar</string>
+    <string name="update_installed_now">Actualizouse. Xa estás na versión nova.</string>
+    <string name="update_needs_permission">Android pide permiso para que esta aplicación poida instalar. Concédello e volve premer en Instalar.</string>
+    <string name="update_grant_permission">Dar permiso</string>
+    <string name="update_not_updatable">Esta é unha compilación de desenvolvemento e non se pode substituír por unha publicada: ten outro nome de paquete e outra chave de sinatura.</string>
+    <string name="update_refused_digest">O ficheiro descargado non coincide co resumo publicado. Non se instala. Téntao outra vez.</string>
+    <string name="update_refused_package">O ficheiro descargado é doutra aplicación. Non se instala.</string>
+    <string name="update_refused_signer">O ficheiro descargado non está asinado coa mesma chave ca esta instalación. Non se instala.</string>
+    <string name="update_refused_unreadable">Non se puido ler o ficheiro descargado como unha aplicación de Android. Non se instala.</string>
 </resources>

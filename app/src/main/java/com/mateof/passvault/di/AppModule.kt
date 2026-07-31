@@ -86,4 +86,30 @@ object AppModule {
         keys: DeviceKeys,
     ): com.mateof.passvault.sync.OperationLog =
         com.mateof.passvault.sync.OperationLog(dao, keys)
+
+    // ── Updating the app from its own releases ───────────────────────────────
+
+    @Provides
+    @Singleton
+    fun gitHubReleases(): com.mateof.passvault.update.GitHubReleases =
+        com.mateof.passvault.update.GitHubReleases()
+
+    @Provides
+    @Singleton
+    fun updateDownloader(
+        @ApplicationContext context: Context,
+    ): com.mateof.passvault.update.UpdateDownloader =
+        com.mateof.passvault.update.UpdateDownloader(context)
+
+    @Provides
+    @Singleton
+    fun apkVerifier(@ApplicationContext context: Context): com.mateof.passvault.update.ApkVerifier =
+        com.mateof.passvault.update.ApkVerifier(context)
+
+    @Provides
+    @Singleton
+    fun updateInstaller(
+        @ApplicationContext context: Context,
+    ): com.mateof.passvault.update.UpdateInstaller =
+        com.mateof.passvault.update.UpdateInstaller(context)
 }

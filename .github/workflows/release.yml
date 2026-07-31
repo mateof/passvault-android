@@ -57,10 +57,24 @@ jobs:
           # be manual.
           VERSION_CODE: ${{ github.run_number }}
 
+      # Published beside the APK so the in-app updater can tell a truncated download from a
+      # complete one before it hands anything to the package installer. It is not a signature
+      # and is not treated as one: whoever could replace the APK could replace this too, which
+      # is why the updater's real check is that the APK is signed with the key already
+      # installed on the phone.
+      - name: Publish a digest beside the APK
+        run: |
+          cd app/build/outputs/apk/release
+          for apk in *.apk; do
+            sha256sum "$apk" > "$apk.sha256"
+          done
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ steps.version.outputs.name }}
           name: v${{ steps.version.outputs.name }}
           generate_release_notes: true
-          files: app/build/outputs/apk/release/*.apk
+          files: |
+            app/build/outputs/apk/release/*.apk
+            app/build/outputs/apk/release/*.apk.sha256

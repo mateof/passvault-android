@@ -116,4 +116,21 @@
     <string name="server_passkey_sign_in">Entrar con una llave de acceso</string>
     <string name="server_passkey_add">Añadir una llave de acceso</string>
     <string name="server_passkey_added">Llave de acceso añadida. La próxima vez puedes entrar sin contraseña.</string>
+    <string name="update_title">Actualizaciones</string>
+    <string name="update_installed">Versión instalada: %1$s</string>
+    <string name="update_explain">Se buscan en la página de publicaciones de PassVault en GitHub. Antes de instalar nada se comprueba que el archivo está firmado con la misma clave que esta instalación: si no lo está, el sistema lo rechazaría igualmente, pero así sabes por qué.</string>
+    <string name="update_check">Buscar actualizaciones</string>
+    <string name="update_up_to_date">Ya tienes la versión más reciente.</string>
+    <string name="update_available">Hay una versión nueva: %1$s</string>
+    <string name="update_size">Descarga de %1$d MB.</string>
+    <string name="update_download">Descargar</string>
+    <string name="update_install">Instalar</string>
+    <string name="update_installed_now">Se ha actualizado. Ya estás en la versión nueva.</string>
+    <string name="update_needs_permission">Android pide permiso para que esta aplicación pueda instalar. Concédeselo y vuelve a pulsar en Instalar.</string>
+    <string name="update_grant_permission">Dar permiso</string>
+    <string name="update_not_updatable">Esta es una compilación de desarrollo y no se puede sustituir por una publicada: tiene otro nombre de paquete y otra clave de firma.</string>
+    <string name="update_refused_digest">El archivo descargado no coincide con el resumen publicado. No se instala. Inténtalo otra vez.</string>
+    <string name="update_refused_package">El archivo descargado es de otra aplicación. No se instala.</string>
+    <string name="update_refused_signer">El archivo descargado no está firmado con la misma clave que esta instalación. No se instala.</string>
+    <string name="update_refused_unreadable">No se ha podido leer el archivo descargado como una aplicación de Android. No se instala.</string>
 </resources>

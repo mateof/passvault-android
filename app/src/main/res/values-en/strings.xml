@@ -116,4 +116,21 @@
     <string name="server_passkey_sign_in">Sign in with a passkey</string>
     <string name="server_passkey_add">Add a passkey</string>
     <string name="server_passkey_added">Passkey added. Next time you can sign in without a password.</string>
+    <string name="update_title">Updates</string>
+    <string name="update_installed">Installed version: %1$s</string>
+    <string name="update_explain">Looked for on PassVault\'s releases page on GitHub. Before anything is installed the file is checked to be signed with the same key as this installation: if it is not, the system would refuse it anyway, but this way you are told why.</string>
+    <string name="update_check">Check for updates</string>
+    <string name="update_up_to_date">You are on the latest version.</string>
+    <string name="update_available">A new version is available: %1$s</string>
+    <string name="update_size">%1$d MB to download.</string>
+    <string name="update_download">Download</string>
+    <string name="update_install">Install</string>
+    <string name="update_installed_now">Updated. You are on the new version.</string>
+    <string name="update_needs_permission">Android asks for permission before this app can install anything. Grant it, then press Install again.</string>
+    <string name="update_grant_permission">Grant permission</string>
+    <string name="update_not_updatable">This is a development build and cannot be replaced by a published one: it has a different package name and a different signing key.</string>
+    <string name="update_refused_digest">The downloaded file does not match the published digest. It will not be installed. Try again.</string>
+    <string name="update_refused_package">The downloaded file belongs to another application. It will not be installed.</string>
+    <string name="update_refused_signer">The downloaded file is not signed with the same key as this installation. It will not be installed.</string>
+    <string name="update_refused_unreadable">The downloaded file could not be read as an Android application. It will not be installed.</string>
 </resources>
