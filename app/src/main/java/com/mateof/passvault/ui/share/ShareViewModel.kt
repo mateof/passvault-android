@@ -140,6 +140,9 @@ class ShareViewModel @Inject constructor(
             stage = ShareStage.Looking,
             ownName = displayName,
             tapReady = true,
+            // Where this phone can be dialled by hand. Discovery is the nice path; this is the
+            // one that works on routers that eat mDNS, which is a lot of them.
+            ownAddress = "${localAddress()}:$port",
         )
         discovering = viewModelScope.launch {
             discovery.discover(displayName).collect { peers ->
@@ -194,6 +197,32 @@ class ShareViewModel @Inject constructor(
     fun reportTapFailure(cause: com.mateof.passvault.share.TransferException) {
         if (_state.value.stage == ShareStage.Looking || _state.value.stage == ShareStage.Idle) {
             _state.value = _state.value.copy(stage = ShareStage.Failed, failure = cause.code)
+        }
+    }
+
+    /**
+     * Dials an address somebody read off the other phone's screen.
+     *
+     * The fallback for a network where discovery is blocked. Exactly as safe as tapping a name
+     * in the list: neither proves anything, which is why both end in the same six digits.
+     */
+    fun connectManual(typed: String) {
+        val cleaned = typed.trim()
+        val host = cleaned.substringBeforeLast(':')
+        val port = cleaned.substringAfterLast(':').toIntOrNull()
+        if (host.isBlank() || port == null || port !in 1..65535) {
+            _state.value = _state.value.copy(failure = TransferError.PROTOCOL, stage = ShareStage.Failed)
+            return
+        }
+        viewModelScope.launch {
+            _state.value = _state.value.copy(stage = ShareStage.Greeting, peerName = cleaned)
+            withContext(Dispatchers.IO) {
+                runCatching {
+                    TransferClient.connect(host, port).use { socket ->
+                        converse(socket, isInitiator = true)
+                    }
+                }.onFailure { report(it) }
+            }
         }
     }
 
@@ -368,6 +397,8 @@ data class ShareUiState(
     /** What is about to leave this phone, so the screen can say so before it does. */
     val scope: ShareScope = ShareScope.Everything,
     val ownName: String? = null,
+    /** host:port, readable off this screen so the other phone can dial it by hand. */
+    val ownAddress: String? = null,
     val peers: List<DiscoveredPeer> = emptyList(),
     val peerName: String? = null,
     val digits: String? = null,

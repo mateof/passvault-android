@@ -25,6 +25,10 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import com.mateof.passvault.R
 import com.mateof.passvault.share.DiscoveredPeer
 import com.mateof.passvault.share.ShareScope
@@ -46,6 +50,7 @@ import com.mateof.passvault.ui.theme.LocalSpacing
 fun ShareScreen(
     state: ShareUiState,
     onConnect: (DiscoveredPeer) -> Unit,
+    onConnectManual: (String) -> Unit,
     onDigitsMatch: () -> Unit,
     onDigitsDiffer: () -> Unit,
     onDone: () -> Unit,
@@ -80,7 +85,7 @@ fun ShareScreen(
         }
 
         when (state.stage) {
-            ShareStage.Idle, ShareStage.Looking -> Looking(state, onConnect)
+            ShareStage.Idle, ShareStage.Looking -> Looking(state, onConnect, onConnectManual)
             ShareStage.Greeting -> Busy(stringResource(R.string.share_greeting, state.peerName ?: ""))
             ShareStage.Comparing -> Comparing(state, onDigitsMatch, onDigitsDiffer)
             ShareStage.Transferring -> Busy(stringResource(R.string.share_transferring))
@@ -131,7 +136,11 @@ private fun ScopeBanner(scope: ShareScope) {
 }
 
 @Composable
-private fun Looking(state: ShareUiState, onConnect: (DiscoveredPeer) -> Unit) {
+private fun Looking(
+    state: ShareUiState,
+    onConnect: (DiscoveredPeer) -> Unit,
+    onConnectManual: (String) -> Unit,
+) {
     val spacing = LocalSpacing.current
 
     Text(
@@ -155,6 +164,48 @@ private fun Looking(state: ShareUiState, onConnect: (DiscoveredPeer) -> Unit) {
         ) {
             CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
             Text(stringResource(R.string.share_no_peers), style = MaterialTheme.typography.bodyMedium)
+        }
+    }
+
+    // The way in when the list stays empty. A lot of routers and every guest network eat the
+    // discovery broadcasts, and NFC needs hardware both phones may lack — this path needs
+    // nothing but eyes: one phone reads its address aloud, the other types it. It ends in the
+    // same six digits as every other path, because typing an address proves nothing either.
+    state.ownAddress?.let { address ->
+        Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) {
+            Column(
+                modifier = Modifier.padding(spacing.medium),
+                verticalArrangement = Arrangement.spacedBy(spacing.small),
+            ) {
+                Text(
+                    text = stringResource(R.string.share_manual_title),
+                    style = MaterialTheme.typography.titleSmall,
+                )
+                Text(
+                    text = stringResource(R.string.share_manual_own, address),
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                var typed by remember { mutableStateOf("") }
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(spacing.small),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    androidx.compose.material3.OutlinedTextField(
+                        value = typed,
+                        onValueChange = { typed = it },
+                        label = { Text(stringResource(R.string.share_manual_field)) },
+                        placeholder = { Text("192.168.0.34:40213") },
+                        singleLine = true,
+                        modifier = Modifier.weight(1f),
+                    )
+                    androidx.compose.material3.TextButton(
+                        onClick = { onConnectManual(typed) },
+                        enabled = ':' in typed,
+                    ) {
+                        Text(stringResource(R.string.share_manual_connect))
+                    }
+                }
+            }
         }
     }
 

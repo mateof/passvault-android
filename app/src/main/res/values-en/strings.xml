@@ -300,4 +300,16 @@
     <string name="events_filter_clear">Clear the filter</string>
     <string name="tags_search_or_create">Search or create a label</string>
     <string name="tags_create_named">Create “%1$s”</string>
+    <string name="share_manual_title">If the other phone never appears</string>
+    <string name="share_manual_own">This phone is listening on %1$s. Type that address on the other one.</string>
+    <string name="share_manual_field">The other phone’s address</string>
+    <string name="share_manual_connect">Connect</string>
+    <string name="share_picker_title">What to share</string>
+    <string name="share_picker_explain">Choose what travels before anything switches on. The other phone receives exactly this and nothing else.</string>
+    <string name="share_picker_everything">The whole wallet</string>
+    <string name="share_picker_whole_event">All of “%1$s”</string>
+    <plurals name="share_picker_chosen">
+        <item quantity="one">Share %1$d ticket</item>
+        <item quantity="other">Share %1$d tickets</item>
+    </plurals>
 </resources>

@@ -13,6 +13,8 @@ import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
@@ -166,6 +168,8 @@ private sealed interface Screen {
     data object Notices : Screen
     data object Groups : Screen
     data object Tags : Screen
+    /** Choosing what to hand over, before the radio does anything. */
+    data object SharePicker : Screen
     data object Profile : Screen
     data object Settings : Screen
     data object Server : Screen
@@ -236,6 +240,7 @@ private fun PassVaultApp(
     BackHandler(
         enabled = screen is Screen.Event ||
             screen is Screen.Tags ||
+            screen is Screen.SharePicker ||
             screen is Screen.Profile ||
             screen is Screen.Settings ||
             screen is Screen.Notices ||
@@ -357,6 +362,7 @@ private fun PassVaultApp(
         Screen.Profile -> Destination.Profile
         Screen.Settings -> Destination.Settings
         is Screen.Share -> Destination.Share
+        Screen.SharePicker -> Destination.Share
         Screen.Server -> Destination.Server
         Screen.Updates -> Destination.Updates
         else -> Destination.Wallet
@@ -372,7 +378,9 @@ private fun PassVaultApp(
             Destination.Tags -> Screen.Tags
             Destination.Profile -> Screen.Profile
             Destination.Settings -> Screen.Settings
-            Destination.Share -> Screen.Share(ShareScope.Everything)
+            // Through the picker, not straight to "everything". A drawer entry that
+            // silently offered the whole wallet taught people this screen was dangerous.
+            Destination.Share -> Screen.SharePicker
             Destination.Server -> Screen.Server
             Destination.Updates -> Screen.Updates
         }
@@ -501,6 +509,13 @@ private fun PassVaultApp(
                 Screen.Notices -> NoticesPane(onBack = { screen = Screen.Wallet })
                 Screen.Groups -> GroupsPane(onBack = { screen = Screen.Wallet })
                 Screen.Tags -> TagsPane(onBack = { screen = Screen.Wallet })
+                Screen.SharePicker -> SharePickerPane(
+                    events = eventsState.events,
+                    tickets = eventTickets,
+                    onLoadEvent = { id -> viewModel.openEvent(id) },
+                    onBack = { screen = Screen.Wallet },
+                    onChosen = { chosen -> screen = Screen.Share(chosen) },
+                )
                 Screen.Profile -> ProfilePane(onBack = { screen = Screen.Wallet })
                 Screen.Settings -> SettingsPane(onBack = { screen = Screen.Wallet })
                 Screen.Server -> ServerPane(onBack = { screen = Screen.Wallet })
@@ -1206,6 +1221,159 @@ private fun GroupsPane(
 }
 
 /**
+ * Choosing what to hand over, before any radio comes on.
+ *
+ * The drawer's share entry used to jump straight to offering the whole wallet, which read as
+ * "this button gives everything away" — technically true and rightly alarming. Now the scope is
+ * a decision made in daylight: everything, one event, or a handful of that event's tickets.
+ * The event screen keeps its own share buttons for people already standing in one.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SharePickerPane(
+    events: List<com.mateof.passvault.ui.wallet.EventRow>,
+    tickets: List<com.mateof.passvault.ui.wallet.TicketRow>,
+    onLoadEvent: (String?) -> Unit,
+    onBack: () -> Unit,
+    onChosen: (ShareScope) -> Unit,
+) {
+    // Null while picking an event; an event while picking its tickets.
+    var narrowing by remember { mutableStateOf<com.mateof.passvault.ui.wallet.EventRow?>(null) }
+    var picked by remember { mutableStateOf(setOf<String>()) }
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text(stringResource(R.string.share_picker_title)) },
+                navigationIcon = {
+                    IconButton(onClick = {
+                        if (narrowing != null) {
+                            narrowing = null
+                            picked = emptySet()
+                            onLoadEvent(null)
+                        } else {
+                            onBack()
+                        }
+                    }) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
+                    }
+                },
+            )
+        },
+    ) { padding ->
+        androidx.compose.foundation.lazy.LazyColumn(
+            modifier = Modifier.padding(padding),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
+            verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp),
+        ) {
+            val chosenEvent = narrowing
+            if (chosenEvent == null) {
+                item {
+                    Text(
+                        text = stringResource(R.string.share_picker_explain),
+                        style = androidx.compose.material3.MaterialTheme.typography.bodyMedium,
+                        color = androidx.compose.material3.MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                item {
+                    androidx.compose.material3.Card(
+                        onClick = { onChosen(ShareScope.Everything) },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(
+                            text = stringResource(R.string.share_picker_everything),
+                            style = androidx.compose.material3.MaterialTheme.typography.titleMedium,
+                            modifier = Modifier.padding(16.dp),
+                        )
+                    }
+                }
+                items(items = events, key = { row -> row.id }) { event ->
+                    androidx.compose.material3.Card(
+                        onClick = {
+                            narrowing = event
+                            picked = emptySet()
+                            onLoadEvent(event.id)
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            com.mateof.passvault.ui.wallet.EventMark(
+                                eventId = event.id,
+                                icon = event.icon,
+                                colour = event.colour,
+                                size = 36.dp,
+                            )
+                            Text(
+                                text = event.name,
+                                style = androidx.compose.material3.MaterialTheme.typography.titleMedium,
+                                modifier = Modifier.padding(start = 12.dp),
+                            )
+                        }
+                    }
+                }
+            } else {
+                // Inside one event: hand over all of it, or tick the seats that travel.
+                item {
+                    androidx.compose.material3.Card(
+                        onClick = { onChosen(ShareScope.Event(chosenEvent.id, chosenEvent.name)) },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(
+                            text = stringResource(R.string.share_picker_whole_event, chosenEvent.name),
+                            style = androidx.compose.material3.MaterialTheme.typography.titleMedium,
+                            modifier = Modifier.padding(16.dp),
+                        )
+                    }
+                }
+                items(items = tickets, key = { row -> row.id }) { ticket ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        androidx.compose.material3.Checkbox(
+                            checked = ticket.id in picked,
+                            onCheckedChange = {
+                                picked =
+                                    if (ticket.id in picked) picked - ticket.id else picked + ticket.id
+                            },
+                        )
+                        Text(
+                            text = listOfNotNull(
+                                ticket.label.ifBlank { null },
+                                ticket.seat,
+                            ).joinToString(" · ").ifBlank { ticket.eventName },
+                        )
+                    }
+                }
+                item {
+                    androidx.compose.material3.Button(
+                        onClick = {
+                            onChosen(
+                                ShareScope.Tickets(chosenEvent.id, chosenEvent.name, picked.toList()),
+                            )
+                        },
+                        // Sharing nothing is not a transfer: the button waits for a choice.
+                        enabled = picked.isNotEmpty(),
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(
+                            pluralStringResource(
+                                R.plurals.share_picker_chosen,
+                                picked.size,
+                                picked.size,
+                            ),
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
  * Passing tickets to a phone in the same room.
  *
  * The permission is asked for here, at the moment the user chose to share, rather than at startup.
@@ -1286,6 +1454,7 @@ private fun SharePane(
         ShareScreen(
             state = state,
             onConnect = viewModel::connect,
+            onConnectManual = viewModel::connectManual,
             onDigitsMatch = viewModel::digitsMatch,
             onDigitsDiffer = viewModel::digitsDiffer,
             onDone = onBack,

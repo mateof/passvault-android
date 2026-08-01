@@ -306,4 +306,16 @@
     <string name="events_filter_clear">Quitar o filtro</string>
     <string name="tags_search_or_create">Buscar ou crear etiqueta</string>
     <string name="tags_create_named">Crear «%1$s»</string>
+    <string name="share_manual_title">Se non aparece o outro móbil</string>
+    <string name="share_manual_own">Este móbil escoita en %1$s. No outro, escribe ese enderezo.</string>
+    <string name="share_manual_field">Enderezo do outro móbil</string>
+    <string name="share_manual_connect">Conectar</string>
+    <string name="share_picker_title">Que compartir</string>
+    <string name="share_picker_explain">Escolle o que vai viaxar antes de acender nada. O outro móbil recibe exactamente isto e nada máis.</string>
+    <string name="share_picker_everything">Todo o moedeiro</string>
+    <string name="share_picker_whole_event">Todo «%1$s»</string>
+    <plurals name="share_picker_chosen">
+        <item quantity="one">Compartir %1$d entrada</item>
+        <item quantity="other">Compartir %1$d entradas</item>
+    </plurals>
 </resources>
