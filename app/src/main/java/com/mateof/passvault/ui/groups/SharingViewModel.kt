@@ -69,13 +69,25 @@ class SharingViewModel @Inject constructor(
         _state.value = _state.value.copy(eventPassword = settings.eventPassword(eventId).orEmpty())
     }
 
+    /**
+     * Checks whoever is being typed, by whichever handle it is.
+     *
+     * An address goes to the directory lookup and a name to the handle check; both answer the
+     * same question — does this reach an account here — which is the question that has to be
+     * answered before the button does anything. A share with a typo in it goes nowhere silently.
+     */
     fun setPendingEmail(eventId: String, value: String) {
         _state.value = _state.value.copy(pendingEmail = value, addressKnown = null)
         val trimmed = value.trim()
-        if (!trimmed.contains('@') || trimmed.length < 5) return
+        val isAddress = trimmed.contains('@')
+        if (trimmed.length < if (isAddress) 5 else 3) return
         viewModelScope.launch {
-            val found = withContext(Dispatchers.IO) { runCatching { api.lookup(trimmed) } }
+            val found = withContext(Dispatchers.IO) {
+                runCatching { if (isAddress) api.lookup(trimmed) else api.handleTaken(trimmed) }
+            }
             if (_state.value.pendingEmail.trim() == trimmed) {
+                // A handle that is taken is a person who exists, which is the same answer as an
+                // address that is known — the two checks mean the same thing from opposite ends.
                 _state.value = _state.value.copy(addressKnown = found.getOrNull())
             }
         }
@@ -85,8 +97,20 @@ class SharingViewModel @Inject constructor(
         api.shareEvent(eventId, "GROUP", groupId)
     }
 
+    /**
+     * Shares with one person, named however the sharer knows them.
+     *
+     * An address if it looks like one, a handle otherwise. The two are told apart by the `@`
+     * rather than by two fields, because somebody sharing an event is thinking "give it to ana",
+     * not "which kind of identifier is this".
+     */
     fun shareWithPerson(eventId: String) = act(eventId) {
-        api.shareEventWithPerson(eventId, _state.value.pendingEmail.trim())
+        val who = _state.value.pendingEmail.trim()
+        if (who.contains('@')) {
+            api.shareEventWithPerson(eventId, who)
+        } else {
+            api.shareEventWithHandle(eventId, who)
+        }
     }
 
     /**

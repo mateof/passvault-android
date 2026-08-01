@@ -213,6 +213,70 @@ class ServerViewModel @Inject constructor(
         }
     }
 
+    /**
+     * The sessions open on this account, and ending one.
+     *
+     * A phone left in a taxi is what this is for, and until now the only answer was to wait for
+     * the session to expire. Loaded when the ready screen appears rather than watched: sessions
+     * change when somebody signs in, which is not often enough to hold a request open for.
+     */
+    fun loadSessions() {
+        if (!api.isSignedIn) return
+        viewModelScope.launch {
+            val loaded = withContext(Dispatchers.IO) { runCatching { api.sessions() } }
+            loaded.onSuccess { _state.value = _state.value.copy(sessions = it) }
+        }
+    }
+
+    fun revokeSession(sessionId: String) {
+        viewModelScope.launch {
+            val done = withContext(Dispatchers.IO) { runCatching { api.revokeSession(sessionId) } }
+            done.fold(
+                onSuccess = {
+                    // Ending the one you are using is allowed and is simply signing out, so the
+                    // screen has to notice rather than showing a list it can no longer refresh.
+                    if (_state.value.sessions.firstOrNull { it.id == sessionId }?.current == true) {
+                        forget()
+                    } else {
+                        loadSessions()
+                    }
+                },
+                onFailure = { _state.value = _state.value.copy(failure = describe(it)) },
+            )
+        }
+    }
+
+    /**
+     * Claims a public name to be found by.
+     *
+     * Checked while it is typed, so a name somebody else has is refused beside the field rather
+     * than after pressing save. The check is a courtesy; the unique index on the server is what
+     * actually decides, and a lost race comes back as the same sentence.
+     */
+    fun checkHandle(value: String) {
+        _state.value = _state.value.copy(handle = value, handleTaken = null, handleSaved = false)
+        val trimmed = value.trim()
+        if (trimmed.length < 3) return
+        viewModelScope.launch {
+            val found = withContext(Dispatchers.IO) { runCatching { api.handleTaken(trimmed) } }
+            if (_state.value.handle.trim() == trimmed) {
+                _state.value = _state.value.copy(handleTaken = found.getOrNull())
+            }
+        }
+    }
+
+    fun saveHandle() {
+        val wanted = _state.value.handle.trim()
+        if (wanted.length < 3) return
+        viewModelScope.launch {
+            val done = withContext(Dispatchers.IO) { runCatching { api.setHandle(wanted) } }
+            _state.value = done.fold(
+                onSuccess = { _state.value.copy(handle = it, handleSaved = true, failure = null) },
+                onFailure = { _state.value.copy(failure = describe(it)) },
+            )
+        }
+    }
+
     /** Loads the groups this account belongs to. Only meaningful once the vault is open. */
     fun loadGroups() {
         viewModelScope.launch {
@@ -351,6 +415,12 @@ class ServerViewModel @Inject constructor(
 enum class ServerStage { Address, SignIn, SecondFactor, Vault, Ready }
 
 data class ServerUiState(
+    /** Where this account is open. Empty until the ready screen asks. */
+    val sessions: List<com.mateof.passvault.server.OpenSession> = emptyList(),
+    /** The public name being typed, and whether anybody already has it. */
+    val handle: String = "",
+    val handleTaken: Boolean? = null,
+    val handleSaved: Boolean = false,
     val address: String = "",
     val stage: ServerStage = ServerStage.Address,
     val busy: Boolean = false,

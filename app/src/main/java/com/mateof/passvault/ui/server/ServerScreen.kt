@@ -55,6 +55,9 @@ fun ServerScreen(
     onConfirmTotp: (String) -> Unit,
     /** Hands the `otpauth:` link to whichever authenticator is installed. */
     onOpenUri: (String) -> Unit,
+    onHandleChanged: (String) -> Unit,
+    onSaveHandle: () -> Unit,
+    onRevokeSession: (String) -> Unit,
     sharingEventName: String? = null,
     modifier: Modifier = Modifier,
 ) {
@@ -86,6 +89,8 @@ fun ServerScreen(
             ServerStage.Vault -> VaultStep(onUnlock)
             ServerStage.Ready -> {
                 ReadyStep(state, onSync, onForget, onAddPasskey, onEnrolTotp, onConfirmTotp, onOpenUri)
+                HandleSection(state, onHandleChanged, onSaveHandle)
+                SessionsSection(state, onRevokeSession)
             }
         }
     }
@@ -369,4 +374,93 @@ private fun ReadyStep(
     }
 
     TextButton(onClick = onForget) { Text(stringResource(R.string.server_forget)) }
+}
+
+/**
+ * A public name to be found by.
+ *
+ * Everything else this server knows about somebody is encrypted; a handle deliberately is not,
+ * because being findable is its whole job. An address is how you reach a person and is theirs to
+ * give out; a handle is how a friend names them when sharing — "compártello a ana" — and a name
+ * nobody can look up is not a name.
+ *
+ * Optional. An account without one is shared with by address exactly as before.
+ */
+@Composable
+private fun HandleSection(
+    state: ServerUiState,
+    onHandleChanged: (String) -> Unit,
+    onSave: () -> Unit,
+) {
+    Text(stringResource(R.string.handle_title), style = MaterialTheme.typography.titleMedium)
+    Text(
+        text = stringResource(R.string.handle_explain),
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    OutlinedTextField(
+        value = state.handle,
+        onValueChange = onHandleChanged,
+        label = { Text(stringResource(R.string.handle_field)) },
+        singleLine = true,
+        isError = state.handleTaken == true,
+        supportingText = {
+            when {
+                state.handleSaved -> Text(stringResource(R.string.handle_free))
+                state.handleTaken == true -> Text(stringResource(R.string.handle_taken))
+                state.handleTaken == false -> Text(stringResource(R.string.handle_free))
+                else -> {}
+            }
+        },
+        modifier = Modifier.fillMaxWidth(),
+    )
+    // Out of reach while somebody else has it: a save that can only be refused is a button whose
+    // one function is to produce an error.
+    OutlinedButton(
+        onClick = onSave,
+        enabled = state.handle.trim().length >= 3 && state.handleTaken != true,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Text(stringResource(R.string.handle_save))
+    }
+}
+
+/**
+ * Where this account is open, and how to close one.
+ *
+ * What each row shows is what the request carried — a client, an address, when it was last used.
+ * None of it is proof of anything, and it is presented as a way to recognise which row is the
+ * phone in your pocket rather than as a security claim.
+ */
+@Composable
+private fun SessionsSection(state: ServerUiState, onRevoke: (String) -> Unit) {
+    if (state.sessions.isEmpty()) return
+
+    Text(stringResource(R.string.sessions_title), style = MaterialTheme.typography.titleMedium)
+    Text(
+        text = stringResource(R.string.sessions_explain),
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+
+    for (session in state.sessions) {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Text(
+                text = session.userAgent ?: stringResource(R.string.sessions_unknown),
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            Text(
+                text = listOfNotNull(
+                    session.ipAddress,
+                    session.lastSeenAt?.take(16)?.replace('T', ' '),
+                    if (session.current) stringResource(R.string.sessions_current) else null,
+                ).joinToString(" · "),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            TextButton(onClick = { onRevoke(session.id) }) {
+                Text(stringResource(R.string.sessions_revoke))
+            }
+        }
+    }
 }

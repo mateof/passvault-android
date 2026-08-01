@@ -57,7 +57,14 @@ object Replay {
                     current.copy(
                         name = operation.body.text("name") ?: current.name,
                         venue = operation.body.text("venue") ?: current.venue,
-                        startsAt = operation.body.text("startsAt") ?: current.startsAt,
+                        // Present-and-empty clears it; absent leaves it alone. Without the
+                        // distinction there is no way to say "this event has no date after all"
+                        // in a format where every field is optional.
+                        startsAt = if (operation.body.containsKey("startsAt")) {
+                            operation.body.text("startsAt")?.ifBlank { null }
+                        } else {
+                            current.startsAt
+                        },
                     )
                 }
 

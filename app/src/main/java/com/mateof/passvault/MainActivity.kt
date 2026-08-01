@@ -21,6 +21,7 @@ import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.Checklist
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Menu
@@ -139,6 +140,7 @@ private sealed interface Screen {
     data class Document(val eventId: String) : Screen
     data object Notices : Screen
     data object Groups : Screen
+    data object Tags : Screen
     data object Server : Screen
     data object Updates : Screen
 }
@@ -164,6 +166,7 @@ private fun PassVaultApp(
     val pendingArchive by viewModel.pendingArchive.collectAsStateWithLifecycle()
     val documentState by viewModel.document.collectAsStateWithLifecycle()
     val eventsState by viewModel.events.collectAsStateWithLifecycle()
+    LaunchedEffect(Unit) { viewModel.refreshTags() }
     val eventTickets by viewModel.eventTickets.collectAsStateWithLifecycle()
     val eventDocuments by viewModel.eventDocuments.collectAsStateWithLifecycle()
     var excluded by remember { mutableStateOf(emptySet<Int>()) }
@@ -204,6 +207,7 @@ private fun PassVaultApp(
     BackHandler(enabled = screen is Screen.Document) { backFromDocument() }
     BackHandler(
         enabled = screen is Screen.Event ||
+            screen is Screen.Tags ||
             screen is Screen.Notices ||
             screen is Screen.Groups ||
             screen is Screen.Server ||
@@ -319,6 +323,7 @@ private fun PassVaultApp(
     val destination = when (screen) {
         Screen.Notices -> Destination.Notices
         Screen.Groups -> Destination.Groups
+        Screen.Tags -> Destination.Tags
         is Screen.Share -> Destination.Share
         Screen.Server -> Destination.Server
         Screen.Updates -> Destination.Updates
@@ -332,6 +337,7 @@ private fun PassVaultApp(
             Destination.Wallet -> Screen.Wallet
             Destination.Notices -> Screen.Notices
             Destination.Groups -> Screen.Groups
+            Destination.Tags -> Screen.Tags
             Destination.Share -> Screen.Share(ShareScope.Everything)
             Destination.Server -> Screen.Server
             Destination.Updates -> Screen.Updates
@@ -415,6 +421,15 @@ private fun PassVaultApp(
                         onMarkChosen = { chosenIcon, chosenColour ->
                             viewModel.setEventMark(current.id, chosenIcon, chosenColour)
                         },
+                        startsAt = row?.startsAt,
+                        tags = eventsState.tags,
+                        tagIds = row?.tagIds.orEmpty(),
+                        onDetailsSaved = { startsAt, tagIds ->
+                            viewModel.setEventStart(current.id, startsAt)
+                            // Labels go to the server and the date to the log: one is what this
+                            // event is to this account, the other is a fact about the event.
+                            viewModel.setEventTags(current.id, tagIds)
+                        },
                         onShare = { chosen ->
                             screen = Screen.Share(
                                 if (chosen == null) {
@@ -447,6 +462,7 @@ private fun PassVaultApp(
                 )
                 Screen.Notices -> NoticesPane(onBack = { screen = Screen.Wallet })
                 Screen.Groups -> GroupsPane(onBack = { screen = Screen.Wallet })
+                Screen.Tags -> TagsPane(onBack = { screen = Screen.Wallet })
                 Screen.Server -> ServerPane(onBack = { screen = Screen.Wallet })
                 Screen.Updates -> UpdatePane(onBack = { screen = Screen.Wallet })
                 is Screen.Document -> DocumentPane(
@@ -614,6 +630,11 @@ private fun EventPane(
     onTicketClick: (String) -> Unit,
     onOpenDocument: (String) -> Unit,
     onMarkChosen: (String, String) -> Unit,
+    /** When it is, as stored. Null for an event nobody has dated. */
+    startsAt: String?,
+    tags: List<com.mateof.passvault.server.Tag>,
+    tagIds: List<String>,
+    onDetailsSaved: (String?, List<String>) -> Unit,
     /** Null shares the whole event; a set shares exactly those tickets. */
     onShare: (Set<String>?) -> Unit,
     /** The same scope, written to a file instead of handed to a phone in the room. */
@@ -621,6 +642,7 @@ private fun EventPane(
 ) {
     var exporting by remember { mutableStateOf(false) }
     var picking by remember { mutableStateOf(false) }
+    var editingDetails by remember { mutableStateOf(false) }
     var sharingWith by remember { mutableStateOf(false) }
     val sharing: com.mateof.passvault.ui.groups.SharingViewModel = hiltViewModel()
     val sharingState by sharing.state.collectAsStateWithLifecycle()
@@ -656,6 +678,19 @@ private fun EventPane(
             onShareWithPerson = { sharing.shareWithPerson(eventId) },
             onRevoke = { sharing.revoke(eventId, it) },
             onDismiss = { sharingWith = false },
+        )
+    }
+
+    if (editingDetails) {
+        com.mateof.passvault.ui.wallet.EventDetailsDialog(
+            startsAt = startsAt,
+            tags = tags,
+            chosenTagIds = tagIds,
+            onDismiss = { editingDetails = false },
+            onSave = { when_, chosen ->
+                editingDetails = false
+                onDetailsSaved(when_, chosen)
+            },
         )
     }
 
@@ -706,6 +741,12 @@ private fun EventPane(
                             Icon(
                                 Icons.Filled.Palette,
                                 contentDescription = stringResource(R.string.event_mark_title),
+                            )
+                        }
+                        IconButton(onClick = { editingDetails = true }) {
+                            Icon(
+                                Icons.Filled.CalendarToday,
+                                contentDescription = stringResource(R.string.event_when),
                             )
                         }
                         IconButton(onClick = { selection = emptySet() }) {
@@ -800,7 +841,13 @@ private fun ServerPane(
     // On arrival, not only on the button. A kept session means this usually finds the wallet
     // already up to date, which is the point: the button is for the moment somebody is standing
     // at a turnstile and will not wait for a schedule.
-    LaunchedEffect(Unit) { viewModel.syncIfPossible() }
+    LaunchedEffect(Unit) {
+        viewModel.syncIfPossible()
+        // The list of open sessions is fetched when the screen appears rather than watched:
+        // sessions change when somebody signs in, which is not often enough to hold a request
+        // open for.
+        viewModel.loadSessions()
+    }
 
     Scaffold(
         topBar = {
@@ -827,6 +874,9 @@ private fun ServerPane(
             onAddPasskey = { viewModel.addPasskey(passkeys, android.os.Build.MODEL ?: "Android") },
             onEnrolTotp = viewModel::enrolTotp,
             onConfirmTotp = viewModel::confirmTotp,
+            onHandleChanged = viewModel::checkHandle,
+            onSaveHandle = viewModel::saveHandle,
+            onRevokeSession = viewModel::revokeSession,
             onOpenUri = { uri ->
                 // Whatever registered for `otpauth:` — Google Authenticator, Microsoft
                 // Authenticator, Aegis, a password manager. If nothing did, the key is on
@@ -861,6 +911,41 @@ private fun DocumentPane(
         },
     ) { padding ->
         com.mateof.passvault.ui.document.DocumentScreen(state, Modifier.padding(padding))
+    }
+}
+
+/**
+ * Labels, which are the reader's own words for their own events.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun TagsPane(
+    onBack: () -> Unit,
+    viewModel: com.mateof.passvault.ui.tags.TagsViewModel = hiltViewModel(),
+) {
+    val state by viewModel.state.collectAsStateWithLifecycle()
+
+    LaunchedEffect(Unit) { viewModel.load() }
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text(stringResource(R.string.tags_title)) },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
+                    }
+                },
+            )
+        },
+    ) { padding ->
+        com.mateof.passvault.ui.tags.TagsScreen(
+            state = state,
+            onCreate = viewModel::create,
+            onUpdate = viewModel::update,
+            onDelete = viewModel::delete,
+            modifier = Modifier.padding(padding),
+        )
     }
 }
 

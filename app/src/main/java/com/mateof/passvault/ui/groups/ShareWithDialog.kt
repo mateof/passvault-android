@@ -174,7 +174,9 @@ fun ShareWithDialog(
                 OutlinedTextField(
                     value = pendingEmail,
                     onValueChange = onEmailChanged,
-                    label = { Text(stringResource(R.string.groups_email)) },
+                    // One field for both, because somebody sharing is thinking "give it to ana",
+                    // not "is this an address or a username".
+                    label = { Text(stringResource(R.string.sharing_person_or_handle)) },
                     singleLine = true,
                     isError = addressKnown == false,
                     supportingText = {

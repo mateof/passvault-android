@@ -27,6 +27,7 @@ class WalletViewModel @Inject constructor(
     @dagger.hilt.android.qualifiers.ApplicationContext private val context: android.content.Context,
     private val repository: WalletRepository,
     private val rasterizer: com.mateof.passvault.ingest.PageRasterizer,
+    private val api: com.mateof.passvault.server.ServerApi,
 ) : ViewModel() {
 
     private val _pendingProposal =
@@ -134,15 +135,63 @@ class WalletViewModel @Inject constructor(
         initialValue = WalletUiState(isLoading = true),
     )
 
-    /** The events the wallet lists. */
+    /**
+     * Labels, and which events carry them.
+     *
+     * Fetched from the server rather than kept on the device, because a label belongs to an
+     * account: the same person's wallet on a second phone should be organised the same way. A
+     * wallet with no server simply has none, which is why this starts empty and stays empty
+     * until something asks.
+     */
+    private val _tags = MutableStateFlow<List<com.mateof.passvault.server.Tag>>(emptyList())
+    private val _eventTags = MutableStateFlow<Map<String, List<String>>>(emptyMap())
+
+    /** The events the wallet lists, with whatever labels the server knows about them. */
     val events: StateFlow<com.mateof.passvault.ui.wallet.EventsUiState> =
-        repository.events()
-            .map { com.mateof.passvault.ui.wallet.EventsUiState(events = it, isLoading = false) }
-            .stateIn(
-                scope = viewModelScope,
-                started = SharingStarted.WhileSubscribed(5_000),
-                initialValue = com.mateof.passvault.ui.wallet.EventsUiState(isLoading = true),
+        combine(repository.events(), _tags, _eventTags) { rows, tags, byEvent ->
+            com.mateof.passvault.ui.wallet.EventsUiState(
+                events = rows.map { row -> row.copy(tagIds = byEvent[row.id].orEmpty()) },
+                isLoading = false,
+                tags = tags,
             )
+        }.stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5_000),
+            initialValue = com.mateof.passvault.ui.wallet.EventsUiState(isLoading = true),
+        )
+
+    /**
+     * Refreshes the labels.
+     *
+     * Called when the wallet appears rather than watched: labels change when somebody edits them,
+     * which is rare, and holding a request open for that would be a poor trade. Failures are
+     * swallowed on purpose — a wallet works with no server, so "could not reach it" must not turn
+     * the list of events into an error.
+     */
+    fun refreshTags() {
+        if (!api.isSignedIn) {
+            _tags.value = emptyList()
+            _eventTags.value = emptyMap()
+            return
+        }
+        viewModelScope.launch {
+            val loaded = withContext(Dispatchers.IO) {
+                runCatching { api.tags() to api.eventTags() }
+            }
+            loaded.onSuccess { (tags, byEvent) ->
+                _tags.value = tags
+                _eventTags.value = byEvent
+            }
+        }
+    }
+
+    /** Sets which labels an event carries, then refreshes so the wallet shows it. */
+    fun setEventTags(eventId: String, tagIds: List<String>) {
+        viewModelScope.launch {
+            withContext(Dispatchers.IO) { runCatching { api.setEventTags(eventId, tagIds) } }
+            refreshTags()
+        }
+    }
 
     private val _openEvent = MutableStateFlow<String?>(null)
 
@@ -220,6 +269,10 @@ class WalletViewModel @Inject constructor(
     /** Records the icon and colour somebody chose for an event. */
     fun setEventMark(eventId: String, icon: String, colour: String) {
         viewModelScope.launch { repository.setEventMark(eventId, icon, colour) }
+    }
+
+    fun setEventStart(eventId: String, startsAt: String?) {
+        viewModelScope.launch { repository.setEventStart(eventId, startsAt) }
     }
 
     private val _events = MutableStateFlow<ImportOutcome?>(null)

@@ -102,6 +102,25 @@ class WalletRepository(
     }
 
     /**
+     * Says when an event is.
+     *
+     * Through the log rather than straight into the row, unlike the mark. A colour is a local
+     * preference; a date is a fact about the event, so it travels to the other phones and to
+     * whoever it is shared with — which is what the log is for.
+     *
+     * A null clears it. `event.update` treats a missing field as "unchanged", so removing a date
+     * has to be said out loud rather than by omission.
+     */
+    suspend fun setEventStart(eventId: String, startsAt: String?) {
+        log.append(
+            eventId,
+            OperationType.EVENT_UPDATE,
+            buildJsonObject { put("startsAt", startsAt ?: "") },
+        )
+        project(log.replay(eventId))
+    }
+
+    /**
      * The documents an event's tickets were split out of, watched.
      *
      * Nothing here is encrypted: a media type, a page count and a size. The bytes are ciphertext

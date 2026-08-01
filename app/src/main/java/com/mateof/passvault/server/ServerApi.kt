@@ -12,6 +12,7 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
+import kotlinx.serialization.json.add
 import kotlinx.serialization.json.putJsonArray
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
@@ -316,6 +317,78 @@ class ServerApi(private val settings: ServerSettings) {
         }
     }
 
+    // --- Labels ---------------------------------------------------------------------------
+
+    /**
+     * The reader's own labels.
+     *
+     * Labels live on the server because they belong to an account rather than to a device: the
+     * same person's wallet on a second phone should be organised the same way. That means the app
+     * can only show them while it is signed in, which is the same rule that already applies to
+     * groups and to notices.
+     */
+    fun tags(): List<Tag> =
+        (call("/api/v1/tags")["tags"] as? JsonArray).orEmpty().map { it.jsonObject }.map {
+            Tag(
+                id = it.text("id").orEmpty(),
+                name = it.text("name").orEmpty(),
+                colour = it.text("colour").orEmpty().ifBlank { "violet" },
+                eventCount = it["eventCount"]?.jsonPrimitive?.content?.toIntOrNull() ?: 0,
+            )
+        }
+
+    fun createTag(name: String, colour: String): String =
+        call(
+            "/api/v1/tags",
+            buildJsonObject {
+                put("name", name)
+                put("colour", colour)
+            },
+        ).text("tagId").orEmpty()
+
+    fun updateTag(tagId: String, name: String, colour: String) {
+        call(
+            "/api/v1/tags/$tagId",
+            buildJsonObject {
+                put("name", name)
+                put("colour", colour)
+            },
+            method = "PATCH",
+        )
+    }
+
+    fun deleteTag(tagId: String) {
+        call("/api/v1/tags/$tagId", method = "DELETE")
+    }
+
+    /** Which labels an event carries. Replaces the set rather than adding to it. */
+    fun setEventTags(eventId: String, tagIds: List<String>) {
+        call(
+            "/api/v1/events/$eventId/tags",
+            buildJsonObject {
+                putJsonArray("tagIds") { tagIds.forEach { add(it) } }
+            },
+            method = "PUT",
+        )
+    }
+
+    /**
+     * Which labels each event carries, for the whole wallet at once.
+     *
+     * One request rather than one per event: a wallet of twelve events would otherwise be twelve
+     * round trips to draw twelve coloured dots.
+     */
+    fun eventTags(): Map<String, List<String>> =
+        (call("/api/v1/events")["events"] as? JsonArray).orEmpty()
+            .map { it.jsonObject }
+            .mapNotNull { event ->
+                val id = event.text("id") ?: return@mapNotNull null
+                val tags = (event["tagIds"] as? JsonArray).orEmpty()
+                    .mapNotNull { it.jsonPrimitive.contentOrNull() }
+                id to tags
+            }
+            .toMap()
+
     // --- Notices, invitations and sessions -----------------------------------------------
 
     /**
@@ -611,6 +684,9 @@ data class AccessEntry(val subjectKind: String, val subjectId: String, val label
 
 /** What an authenticator needs, in the two forms one might be given it. */
 data class TotpEnrolment(val secret: String, val uri: String)
+
+/** A word somebody chose for their own events, and the colour it is drawn in. */
+data class Tag(val id: String, val name: String, val colour: String, val eventCount: Int)
 
 /** Something that happened, which the reader may not have been present for. */
 data class Notice(
