@@ -312,4 +312,9 @@
         <item quantity="one">Compartir %1$d entrada</item>
         <item quantity="other">Compartir %1$d entradas</item>
     </plurals>
+    <string name="delete_account_start">Eliminar mi cuenta…</string>
+    <string name="delete_account_title">Eliminar la cuenta</string>
+    <string name="delete_account_warning">Se borra la cuenta en el servidor: el baúl, tus eventos y sus archivos, también de las carteras de quien los recibió. No se puede deshacer. La cartera local de este móvil se conserva.</string>
+    <string name="delete_account_field">Contraseña (o correo, si entras con Google/llave)</string>
+    <string name="delete_account_confirm">Eliminar definitivamente</string>
 </resources>

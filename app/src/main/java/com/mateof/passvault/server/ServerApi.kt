@@ -212,6 +212,23 @@ class ServerApi(private val settings: ServerSettings) {
     /** Where the web administration lives, for a phone that wants to open it. */
     fun adminUrl(): String = settings.baseUrl().trimEnd('/') + "/admin"
 
+    /**
+     * Deletes this account on the server, confirmed by whichever secret the account has.
+     *
+     * The one value is sent under both names because the phone does not know which kind of
+     * account this is; the server checks the one that applies and ignores the other.
+     */
+    fun deleteMyAccount(secret: String) {
+        call(
+            "/api/v1/me",
+            buildJsonObject {
+                put("password", secret)
+                put("emailConfirmation", secret)
+            },
+            method = "DELETE",
+        )
+    }
+
     fun me(): Account {
         val result = call("/api/v1/me")
         return Account(

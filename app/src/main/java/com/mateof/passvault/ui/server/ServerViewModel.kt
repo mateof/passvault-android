@@ -171,6 +171,29 @@ class ServerViewModel @Inject constructor(
     fun setUiLocale(tag: String?) = settings.setUiLocale(tag)
 
     /**
+     * Deletes the account on the server, then forgets everything local about it.
+     *
+     * The wallet on this phone survives — it existed before the server and owes it nothing —
+     * but the connection, the sealed secrets and the schedule all go, because the account they
+     * belonged to no longer exists.
+     */
+    fun deleteAccount(secret: String, onDeleted: () -> Unit) {
+        viewModelScope.launch {
+            _state.value = _state.value.copy(busy = true, failure = null)
+            val done = withContext(Dispatchers.IO) { runCatching { api.deleteMyAccount(secret) } }
+            done.fold(
+                onSuccess = {
+                    forget()
+                    onDeleted()
+                },
+                onFailure = {
+                    _state.value = _state.value.copy(busy = false, failure = describe(it))
+                },
+            )
+        }
+    }
+
+    /**
      * Signs out of the server and stays pointed at it.
      *
      * Different from `forget`, which erases the address too. Signing out is "not me, not now":

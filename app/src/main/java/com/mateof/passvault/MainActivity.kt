@@ -1060,6 +1060,7 @@ private fun ProfilePane(
             onSaveHandle = viewModel::saveHandle,
             onRevokeSession = viewModel::revokeSession,
             onSignOut = viewModel::signOut,
+            onDeleteAccount = { secret -> viewModel.deleteAccount(secret, onDeleted = onBack) },
             modifier = Modifier.padding(padding),
         )
     }

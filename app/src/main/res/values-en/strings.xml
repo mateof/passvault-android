@@ -312,4 +312,9 @@
         <item quantity="one">Share %1$d ticket</item>
         <item quantity="other">Share %1$d tickets</item>
     </plurals>
+    <string name="delete_account_start">Delete my account…</string>
+    <string name="delete_account_title">Delete the account</string>
+    <string name="delete_account_warning">The account on the server is removed: the vault, your events and their files, from the wallets of everyone who received them too. This cannot be undone. The local wallet on this phone survives.</string>
+    <string name="delete_account_field">Password (or email, if you sign in with Google/a key)</string>
+    <string name="delete_account_confirm">Delete for good</string>
 </resources>

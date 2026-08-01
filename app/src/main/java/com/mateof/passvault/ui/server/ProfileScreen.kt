@@ -46,11 +46,15 @@ fun ProfileScreen(
     onSaveHandle: () -> Unit,
     onRevokeSession: (String) -> Unit,
     onSignOut: () -> Unit,
+    onDeleteAccount: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val spacing = LocalSpacing.current
     var inspecting by androidx.compose.runtime.remember {
         androidx.compose.runtime.mutableStateOf<com.mateof.passvault.server.OpenSession?>(null)
+    }
+    var confirmingDeletion by androidx.compose.runtime.remember {
+        androidx.compose.runtime.mutableStateOf(false)
     }
 
     if (state.stage != ServerStage.Ready) {
@@ -208,6 +212,27 @@ fun ProfileScreen(
                 modifier = Modifier.padding(start = spacing.small),
             )
         }
+
+        // The way out with no way back, visually last and visually quiet: it must be findable
+        // by somebody looking for it and unremarkable to everybody else.
+        TextButton(
+            onClick = { confirmingDeletion = true },
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text(
+                text = stringResource(R.string.delete_account_start),
+                color = MaterialTheme.colorScheme.error,
+            )
+        }
+    }
+
+    if (confirmingDeletion) {
+        DeleteAccountDialog(
+            busy = state.busy,
+            failure = state.failure,
+            onDismiss = { confirmingDeletion = false },
+            onConfirm = onDeleteAccount,
+        )
     }
 
     inspecting?.let { session ->
@@ -329,4 +354,57 @@ fun SettingsScreen(
             }
         }
     }
+}
+
+/**
+ * The confirmation that cannot be a reflex.
+ *
+ * The secret is typed here — the password, or the address for an account that has none —
+ * because a password prompt is the strongest "are you sure" an interface can ask, and this is
+ * the one act in the whole application with nothing on the other side of it.
+ */
+@Composable
+private fun DeleteAccountDialog(
+    busy: Boolean,
+    failure: String?,
+    onDismiss: () -> Unit,
+    onConfirm: (String) -> Unit,
+) {
+    var secret by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf("") }
+
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.delete_account_title)) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(stringResource(R.string.delete_account_warning))
+                failure?.let {
+                    Text(text = it, color = MaterialTheme.colorScheme.error)
+                }
+                OutlinedTextField(
+                    value = secret,
+                    onValueChange = { secret = it },
+                    label = { Text(stringResource(R.string.delete_account_field)) },
+                    singleLine = true,
+                    visualTransformation =
+                        androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { onConfirm(secret) },
+                enabled = secret.isNotBlank() && !busy,
+            ) {
+                Text(
+                    text = stringResource(R.string.delete_account_confirm),
+                    color = MaterialTheme.colorScheme.error,
+                )
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) }
+        },
+    )
 }
