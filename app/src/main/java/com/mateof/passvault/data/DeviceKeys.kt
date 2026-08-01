@@ -25,6 +25,19 @@ interface DeviceKeys {
 
     /** Who this device is when it signs an operation or pairs with another phone. */
     fun identity(): DeviceIdentity
+
+    /**
+     * Seals a short secret so it can be written to ordinary storage.
+     *
+     * For things that are neither wallet data nor identity — a server session token — which need
+     * to survive a restart and must not be readable by anything that gets at the app's files.
+     * The same KeyStore key that wraps the vault key does it, so the sealed value is useless on
+     * another device and useless here to anything that cannot ask the KeyStore.
+     */
+    fun seal(secret: String): String
+
+    /** Null when it was written by a different KeyStore key, which is what a reinstall leaves. */
+    fun open(sealed: String): String?
 }
 
 /**
@@ -81,6 +94,13 @@ class KeyStoreDeviceKeys(context: Context) : DeviceKeys {
     override fun vaultKey(): ByteArray = cached
 
     override fun identity(): DeviceIdentity = cachedIdentity
+
+    override fun seal(secret: String): String =
+        Base64Url.encode(wrap(secret.toByteArray(Charsets.UTF_8)))
+
+    override fun open(sealed: String): String? = runCatching {
+        unwrap(Base64Url.decode(sealed)).toString(Charsets.UTF_8)
+    }.getOrNull()
 
     private fun loadOrCreate(): ByteArray {
         val stored = preferences.getString(WRAPPED_KEY, null)
@@ -176,4 +196,11 @@ class InMemoryDeviceKeys(
     override fun vaultKey(): ByteArray = key
 
     override fun identity(): DeviceIdentity = identity
+
+    // Not encryption, and not pretending to be: a test double for storage that a test can read
+    // back. The real one goes through the KeyStore.
+    override fun seal(secret: String): String = Base64Url.encode(secret.toByteArray(Charsets.UTF_8))
+
+    override fun open(sealed: String): String? =
+        runCatching { Base64Url.decode(sealed).toString(Charsets.UTF_8) }.getOrNull()
 }

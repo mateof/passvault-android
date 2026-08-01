@@ -220,4 +220,19 @@
     <string name="update_channel">Updates</string>
     <string name="update_restart_title">PassVault has updated</string>
     <string name="update_restart_body">Tap to open your wallet again.</string>
+    <string name="notices_title">Notices</string>
+    <string name="notices_need_server">Notices come from the server. Connect to one to see them.</string>
+    <string name="notices_none">Nothing here.</string>
+    <string name="notices_invitations">Events shared with you</string>
+    <string name="notices_recent">Recent notices</string>
+    <string name="notices_accept">Accept</string>
+    <string name="notices_decline">Decline</string>
+    <string name="notices_mark_read">Mark read</string>
+    <string name="notices_needs_password">Needs a password</string>
+    <string name="notices_an_event">An event</string>
+    <string name="notices_password_explain">This event needs a password. Ask whoever shared it with you.</string>
+    <string name="notice_invited">%1$s is sharing %2$s with you.</string>
+    <string name="notice_accepted">Your shared event was accepted.</string>
+    <string name="notice_declined">Your shared event was declined.</string>
+    <string name="notice_assigned">A ticket was assigned to you.</string>
 </resources>

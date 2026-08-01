@@ -13,6 +13,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.Group
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.ConfirmationNumber
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.SystemUpdate
@@ -45,7 +46,7 @@ import com.mateof.passvault.ui.theme.LocalSpacing
  * is and which version is running — the two things somebody looks for first when they want to
  * report that something is wrong.
  */
-enum class Destination { Wallet, Groups, Share, Server, Updates }
+enum class Destination { Wallet, Notices, Groups, Share, Server, Updates }
 
 @Composable
 fun MainDrawerSheet(
@@ -94,6 +95,7 @@ fun MainDrawerSheet(
         Spacer(Modifier.padding(spacing.tight))
 
         Entry(Destination.Wallet, current, Icons.Filled.ConfirmationNumber, R.string.events_title, onSelect)
+        Entry(Destination.Notices, current, Icons.Filled.Notifications, R.string.notices_title, onSelect)
         Entry(Destination.Groups, current, Icons.Filled.Group, R.string.groups_title, onSelect)
         Entry(Destination.Share, current, Icons.Filled.Share, R.string.action_share, onSelect)
         Entry(Destination.Server, current, Icons.Filled.Cloud, R.string.server_title, onSelect)

@@ -5,13 +5,12 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.mateof.passvault.crypto.Base64Url
 import com.mateof.passvault.data.DeviceKeys
-import com.mateof.passvault.data.WalletRepository
 import com.mateof.passvault.server.ServerApi
 import com.mateof.passvault.server.ServerException
 import com.mateof.passvault.server.ServerSettings
 import com.mateof.passvault.server.SignInOutcome
-import com.mateof.passvault.sync.AcceptState
-import com.mateof.passvault.sync.OperationLog
+import com.mateof.passvault.sync.SyncOutcome
+import com.mateof.passvault.sync.SyncSummary
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.Dispatchers
@@ -37,27 +36,15 @@ import kotlinx.coroutines.withContext
  */
 @HiltViewModel
 class ServerViewModel @Inject constructor(
+    @dagger.hilt.android.qualifiers.ApplicationContext private val context: android.content.Context,
     private val settings: ServerSettings,
     private val api: ServerApi,
-    private val log: OperationLog,
-    private val wallet: WalletRepository,
+    private val engine: com.mateof.passvault.sync.SyncEngine,
     private val keys: DeviceKeys,
 ) : ViewModel() {
 
-    /**
-     * What this device is called on the server's device list.
-     *
-     * The model rather than anything the user typed: it is shown next to a signing key in a list
-     * of devices, and "Pixel 8" tells its owner which one to revoke where "Android" does not.
-     */
-    private val deviceName: String = listOf(Build.MANUFACTURER, Build.MODEL)
-        .filter { it.isNotBlank() }
-        .joinToString(" ")
-        .ifBlank { "Android" }
-        .take(120)
-
     private val _state = MutableStateFlow(
-        ServerUiState(address = settings.baseUrl(), stage = stageFor(settings)),
+        ServerUiState(address = settings.baseUrl(), stage = stageFor(settings, api.isSignedIn)),
     )
     val state: StateFlow<ServerUiState> = _state.asStateFlow()
 
@@ -65,6 +52,27 @@ class ServerViewModel @Inject constructor(
 
     fun setAddress(value: String) {
         _state.value = _state.value.copy(address = value)
+    }
+
+    /**
+     * Synchronises when the screen opens, if there is anything to synchronise with.
+     *
+     * Together with the periodic worker this is what makes the button optional: by the time
+     * somebody looks at the wallet, what a friend shared this morning is already in it. The
+     * button stays because a schedule is not something to trust while standing at a turnstile.
+     */
+    fun syncIfPossible() {
+        if (!engine.isPossible) {
+            // Nothing to schedule either. A wallet that never joined a server should not have a
+            // periodic job waking the device up to be told so.
+            com.mateof.passvault.sync.SyncScheduler.cancel(context)
+            return
+        }
+        // Asked for here rather than at startup: this is the first point at which the app knows
+        // there is a server and a session. The request is unique by name, so repeating it
+        // replaces the previous schedule instead of stacking up.
+        com.mateof.passvault.sync.SyncScheduler.schedule(context)
+        sync()
     }
 
     /** Saves the address and asks the server whether it is one. */
@@ -155,170 +163,24 @@ class ServerViewModel @Inject constructor(
     /**
      * Exchanges the log with the server, one event at a time.
      *
-     * The same operations the two-phone transfer sends, through a different transport — one
-     * mechanism, three transports, which is what the specification promises and what makes this a
-     * few lines rather than a second implementation.
-     *
-     * Events made on this phone are uploaded too. The server creates one from the `event.create`
-     * the log already carries, keeping the identifier this device signs against — so a wallet built
-     * entirely offline, which is how the app is meant to be used, ends up there rather than being
-     * counted as "local only" and skipped while the screen reports a successful synchronisation.
+     * The work itself lives in `SyncEngine`, which is what lets a background run and this button
+     * be the same thing. Pressing it while the scheduled run is in flight waits rather than being
+     * refused: "already running" is not an answer somebody who pressed a button wants.
      */
     fun sync() {
         viewModelScope.launch {
             _state.value = _state.value.copy(busy = true, failure = null, lastSync = null)
-            val outcome = withContext(Dispatchers.IO) {
-                runCatching {
-                    var sent = 0
-                    var applied = 0
-                    var published = 0
-
-                    // Before anything is pushed. The server verifies every operation against a
-                    // registered signing key and holds back what it cannot verify, so skipping
-                    // this uploads a wallet that lands entirely in quarantine — and reports
-                    // success while doing it.
-                    announceThisDevice()
-
-                    val remote = api.events().toSet()
-                    val local = log.eventIds().toSet()
-
-                    // The union, not the local list. Iterating only what this phone already holds
-                    // makes an event that exists solely on the server unreachable: it is never
-                    // asked for, so it never arrives, and the screen says "received 0" as though
-                    // that were the truth. Joining a server is mostly about the events already
-                    // there.
-                    var documentsUp = 0
-                    var documentsDown = 0
-
-                    for (eventId in remote + local) {
-                        val mine = if (eventId in local) {
-                            log.since(eventId, cursor = "", limit = 500).operations
-                        } else {
-                            emptyList()
-                        }
-                        // The password the event is to be published under, if one was
-                        // chosen. It can only be set as the server creates the event, which for a
-                        // wallet built offline is now rather than when somebody asked for it.
-                        val chosen = settings.eventPassword(eventId)
-                        val result = api.sync(eventId, mine, cursor = null, eventPassword = chosen)
-                        // Dropped once it has done its work. Keeping it would leave a password
-                        // for an event on disk with nothing left to use it for.
-                        if (chosen != null && result.created) settings.setEventPassword(eventId, null)
-                        sent += mine.size
-                        if (result.created) published += 1
-                        applied += log.accept(result.received)
-                            .count { it.state == AcceptState.APPLIED }
-
-                        // After the operations, because the event has to exist on both sides
-                        // before a file can be attached to it.
-                        val exchanged = exchangeDocuments(eventId)
-                        documentsUp += exchanged.first
-                        documentsDown += exchanged.second
-                    }
-                    wallet.projectAll()
-                    SyncSummary(
-                        sent = sent,
-                        received = applied,
-                        published = published,
-                        documentsSent = documentsUp,
-                        documentsReceived = documentsDown,
-                    )
-                }
+            _state.value = when (val outcome = engine.sync()) {
+                is SyncOutcome.Done -> _state.value.copy(busy = false, lastSync = outcome.summary)
+                SyncOutcome.NotConfigured -> _state.value.copy(busy = false)
+                SyncOutcome.SignedOut ->
+                    // The session ended somewhere else — revoked from another device, or simply
+                    // expired. Back to the sign-in step rather than a failure message about a
+                    // synchronisation, which is not the thing that needs attention.
+                    _state.value.copy(busy = false, stage = ServerStage.SignIn)
+                is SyncOutcome.Failed -> _state.value.copy(busy = false, failure = outcome.message)
             }
-            _state.value = outcome.fold(
-                onSuccess = { _state.value.copy(busy = false, lastSync = it) },
-                onFailure = { _state.value.copy(busy = false, failure = describe(it)) },
-            )
         }
-    }
-
-    /**
-     * The original files, in both directions. Returns what went up and what came down.
-     *
-     * The log carries operations, and a PDF is not one: it is not something that happened to an
-     * event, it is what the event was made from. So it travels beside the log rather than inside
-     * it, and it travels by identifier — each side asks what the other has and sends only what is
-     * missing. That is what makes running this on every synchronisation cheap, and what stops a
-     * daily upload from leaving a copy of the same file per day.
-     *
-     * Both directions, because both gaps are real: a wallet built on a phone has a file the server
-     * has never seen, and an event imported through the web has one this phone has never seen.
-     */
-    private suspend fun exchangeDocuments(eventId: String): Pair<Int, Int> {
-        val here = wallet.documentsOf(eventId)
-        val there = try {
-            api.documents(eventId)
-        } catch (failure: ServerException) {
-            // An event this server does not hold, or will not open for this account. Neither is a
-            // failed synchronisation: the operations for it were exchanged or refused on their own
-            // terms and there is no document conversation to have. Anything else — a file too
-            // large, a server in trouble — is left to fail loudly, because a document that
-            // silently never arrives is the very thing this exists to stop.
-            if (failure.status == 404 || failure.status == 403) return 0 to 0
-            throw failure
-        }
-        val theirIds = there.map { it.id }.toSet()
-        var up = 0
-        var down = 0
-
-        for (document in here.filter { it.id !in theirIds }) {
-            val bytes = wallet.documentBytes(document.id)
-                // A row with no file behind it. Nothing to send, and nothing worth failing over:
-                // the wallet is not broken by a document it can no longer open.
-                ?: continue
-            val stored = try {
-                api.uploadDocument(
-                    eventId = eventId,
-                    documentId = document.id,
-                    mediaType = document.mediaType,
-                    pageCount = document.pageCount,
-                    bytes = bytes,
-                )
-            } catch (failure: ServerException) {
-                // Only whoever created the event says what its original file is. A phone that was
-                // given tickets holds a copy of the document and is not entitled to publish it,
-                // which is a rule rather than a fault.
-                if (failure.status == 403) continue
-                throw failure
-            }
-            if (stored) up += 1
-        }
-
-        val hereIds = here.map { it.id }.toSet()
-        for (document in there.filter { it.id !in hereIds }) {
-            val bytes = api.downloadDocument(eventId, document.id) ?: continue
-            wallet.keepDocument(
-                id = document.id,
-                eventId = eventId,
-                mediaType = document.mediaType,
-                pageCount = document.pageCount,
-                bytes = bytes,
-            )
-            down += 1
-        }
-
-        return up to down
-    }
-
-    /**
-     * Registers this device's signing key with the server.
-     *
-     * Idempotent and cheap, so it runs on every synchronisation rather than once at sign-in: the
-     * alternative is remembering whether it was done, per server, and being wrong about it after a
-     * reinstall or a restore — where the cost of being wrong is a wallet that uploads into
-     * quarantine.
-     *
-     * The identifier is the one this device already signs with, never a new one. Rotating it would
-     * orphan every operation it has ever produced.
-     */
-    private fun announceThisDevice() {
-        val identity = keys.identity()
-        api.registerDevice(
-            deviceId = identity.deviceId,
-            name = deviceName,
-            signingPublicKey = Base64Url.encode(identity.signingPublicKey),
-            agreementPublicKey = Base64Url.encode(identity.agreementPublicKey),
-        )
     }
 
     /**
@@ -452,6 +314,9 @@ class ServerViewModel @Inject constructor(
         api.signOutLocally()
         settings.clear()
         challenge = null
+        // The one thing that ends a kept session, and with it the background synchronisation:
+        // "until I decide to leave it" is what the stored token promises.
+        com.mateof.passvault.sync.SyncScheduler.cancel(context)
         _state.value = ServerUiState(address = "", stage = ServerStage.Address)
     }
 
@@ -467,23 +332,23 @@ class ServerViewModel @Inject constructor(
     }
 
     private companion object {
-        fun stageFor(settings: ServerSettings) =
-            if (settings.isConfigured()) ServerStage.SignIn else ServerStage.Address
+        /**
+         * Where the server screen opens.
+         *
+         * A kept session goes straight to the ready state rather than to a sign-in form. The
+         * token survives a restart now, so asking for a password on every launch would be asking
+         * for something the app already has — and the vault passphrase is still asked for
+         * separately, because that one genuinely is not stored anywhere.
+         */
+        fun stageFor(settings: ServerSettings, signedIn: Boolean = false) = when {
+            !settings.isConfigured() -> ServerStage.Address
+            signedIn -> ServerStage.Ready
+            else -> ServerStage.SignIn
+        }
     }
 }
 
 enum class ServerStage { Address, SignIn, SecondFactor, Vault, Ready }
-
-data class SyncSummary(
-    val sent: Int,
-    val received: Int,
-    /** Events this synchronisation created on the server, having existed only on this phone. */
-    val published: Int,
-    /** Original files uploaded, which the operation log has no way of carrying. */
-    val documentsSent: Int = 0,
-    /** And ones fetched, for an event imported somewhere else. */
-    val documentsReceived: Int = 0,
-)
 
 data class ServerUiState(
     val address: String = "",

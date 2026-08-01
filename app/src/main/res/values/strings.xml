@@ -226,4 +226,19 @@
     <string name="update_channel">Actualizacións</string>
     <string name="update_restart_title">PassVault actualizouse</string>
     <string name="update_restart_body">Toca para abrir a carteira outra vez.</string>
+    <string name="notices_title">Avisos</string>
+    <string name="notices_need_server">Os avisos veñen do servidor. Conéctate a un para velos.</string>
+    <string name="notices_none">Non hai nada por aquí.</string>
+    <string name="notices_invitations">Eventos que che comparten</string>
+    <string name="notices_recent">Avisos recentes</string>
+    <string name="notices_accept">Aceptar</string>
+    <string name="notices_decline">Rexeitar</string>
+    <string name="notices_mark_read">Marcar como lido</string>
+    <string name="notices_needs_password">Pide contrasinal</string>
+    <string name="notices_an_event">Un evento</string>
+    <string name="notices_password_explain">Este evento pide un contrasinal. Pídello a quen cho compartiu.</string>
+    <string name="notice_invited">%1$s comparte contigo %2$s.</string>
+    <string name="notice_accepted">Aceptaron o evento que compartiches.</string>
+    <string name="notice_declined">Rexeitaron o evento que compartiches.</string>
+    <string name="notice_assigned">Asignáronche unha entrada.</string>
 </resources>

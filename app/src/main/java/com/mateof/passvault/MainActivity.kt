@@ -137,6 +137,7 @@ private sealed interface Screen {
     data class Ticket(val ticketId: String) : Screen
     data class Share(val scope: ShareScope) : Screen
     data class Document(val eventId: String) : Screen
+    data object Notices : Screen
     data object Groups : Screen
     data object Server : Screen
     data object Updates : Screen
@@ -203,6 +204,7 @@ private fun PassVaultApp(
     BackHandler(enabled = screen is Screen.Document) { backFromDocument() }
     BackHandler(
         enabled = screen is Screen.Event ||
+            screen is Screen.Notices ||
             screen is Screen.Groups ||
             screen is Screen.Server ||
             screen is Screen.Updates,
@@ -315,6 +317,7 @@ private fun PassVaultApp(
     val drawer = rememberDrawerState(DrawerValue.Closed)
     val scope = rememberCoroutineScope()
     val destination = when (screen) {
+        Screen.Notices -> Destination.Notices
         Screen.Groups -> Destination.Groups
         is Screen.Share -> Destination.Share
         Screen.Server -> Destination.Server
@@ -327,6 +330,7 @@ private fun PassVaultApp(
         viewModel.openEvent(null)
         screen = when (chosen) {
             Destination.Wallet -> Screen.Wallet
+            Destination.Notices -> Screen.Notices
             Destination.Groups -> Screen.Groups
             Destination.Share -> Screen.Share(ShareScope.Everything)
             Destination.Server -> Screen.Server
@@ -441,6 +445,7 @@ private fun PassVaultApp(
                         }
                     },
                 )
+                Screen.Notices -> NoticesPane(onBack = { screen = Screen.Wallet })
                 Screen.Groups -> GroupsPane(onBack = { screen = Screen.Wallet })
                 Screen.Server -> ServerPane(onBack = { screen = Screen.Wallet })
                 Screen.Updates -> UpdatePane(onBack = { screen = Screen.Wallet })
@@ -792,6 +797,11 @@ private fun ServerPane(
     // has to attach to a window rather than to the application.
     val passkeys = remember(context) { com.mateof.passvault.server.Passkeys(context) }
 
+    // On arrival, not only on the button. A kept session means this usually finds the wallet
+    // already up to date, which is the point: the button is for the moment somebody is standing
+    // at a turnstile and will not wait for a schedule.
+    LaunchedEffect(Unit) { viewModel.syncIfPossible() }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -851,6 +861,45 @@ private fun DocumentPane(
         },
     ) { padding ->
         com.mateof.passvault.ui.document.DocumentScreen(state, Modifier.padding(padding))
+    }
+}
+
+/**
+ * What needs an answer.
+ *
+ * Sharing offers an event rather than putting it in a wallet unasked, so without this screen an
+ * Android user cannot accept anything anybody shares with them. Synchronising happens on the way
+ * out of it: the tickets are the reason for saying yes.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun NoticesPane(
+    onBack: () -> Unit,
+    viewModel: com.mateof.passvault.ui.notices.NoticesViewModel = hiltViewModel(),
+) {
+    val state by viewModel.state.collectAsStateWithLifecycle()
+
+    LaunchedEffect(Unit) { viewModel.load() }
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text(stringResource(R.string.notices_title)) },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
+                    }
+                },
+            )
+        },
+    ) { padding ->
+        com.mateof.passvault.ui.notices.NoticesScreen(
+            state = state,
+            onAccept = viewModel::accept,
+            onDecline = viewModel::decline,
+            onMarkRead = viewModel::markRead,
+            modifier = Modifier.padding(padding),
+        )
     }
 }
 

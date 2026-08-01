@@ -71,8 +71,11 @@ object AppModule {
 
     @Provides
     @Singleton
-    fun serverSettings(@ApplicationContext context: Context): com.mateof.passvault.server.ServerSettings =
-        com.mateof.passvault.server.ServerSettings(context)
+    fun serverSettings(
+        @ApplicationContext context: Context,
+        keys: DeviceKeys,
+    ): com.mateof.passvault.server.ServerSettings =
+        com.mateof.passvault.server.ServerSettings(context, keys)
 
     @Provides
     @Singleton

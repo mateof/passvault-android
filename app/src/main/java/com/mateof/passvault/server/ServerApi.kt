@@ -42,13 +42,22 @@ class ServerApi(private val settings: ServerSettings) {
 
     private val jsonType = "application/json; charset=utf-8".toMediaType()
 
+    /**
+     * The bearer token.
+     *
+     * Restored from storage on first use rather than held only in memory: a wallet that asks for
+     * a password every time the process restarts is a wallet nobody keeps signed in, and this is
+     * the app somebody opens in a queue.
+     */
     @Volatile
-    private var token: String? = null
+    private var token: String? = settings.sessionToken()
 
     val isSignedIn: Boolean get() = token != null
 
+    /** Forgets it here and on disk. What "sign out" means and the only thing that ends it. */
     fun signOutLocally() {
         token = null
+        settings.setSessionToken(null)
     }
 
     private fun url(path: String): String {
@@ -132,6 +141,7 @@ class ServerApi(private val settings: ServerSettings) {
     private fun outcomeOf(result: JsonObject): SignInOutcome {
         if (result.text("status") == "complete") {
             token = result.text("token")
+            settings.setSessionToken(token)
             return SignInOutcome.SignedIn(result.text("userId").orEmpty())
         }
         return SignInOutcome.SecondFactorNeeded(
@@ -144,6 +154,7 @@ class ServerApi(private val settings: ServerSettings) {
     fun signOut() {
         runCatching { call("/api/v1/auth/logout", buildJsonObject { }) }
         token = null
+        settings.setSessionToken(null)
     }
 
     fun me(): Account {
@@ -303,6 +314,99 @@ class ServerApi(private val settings: ServerSettings) {
             }
             return response.body?.bytes()
         }
+    }
+
+    // --- Notices, invitations and sessions -----------------------------------------------
+
+    /**
+     * What happened while nobody was looking, and what needs an answer.
+     *
+     * Sharing offers an event now rather than imposing it, so a wallet that cannot read this list
+     * is a wallet where everything anybody shares stays invisible.
+     */
+    fun notices(): Pair<List<Notice>, Int> {
+        val result = call("/api/v1/notifications")
+        val list = (result["notifications"] as? JsonArray).orEmpty().map { it.jsonObject }.map {
+            Notice(
+                id = it.text("id").orEmpty(),
+                kind = it.text("kind").orEmpty(),
+                eventId = (it["payload"] as? JsonObject)?.text("eventId").orEmpty(),
+                eventName = (it["payload"] as? JsonObject)?.text("eventName").orEmpty(),
+                invitedBy = (it["payload"] as? JsonObject)?.text("invitedBy").orEmpty(),
+                createdAt = it.text("createdAt").orEmpty(),
+                read = it["read"]?.jsonPrimitive?.content == "true",
+            )
+        }
+        val unread = result["unread"]?.jsonPrimitive?.content?.toIntOrNull() ?: 0
+        return list to unread
+    }
+
+    fun markNoticesRead() {
+        call("/api/v1/notifications/read", buildJsonObject { })
+    }
+
+    fun invitations(): List<Invitation> =
+        (call("/api/v1/invitations")["invitations"] as? JsonArray).orEmpty()
+            .map { it.jsonObject }
+            .map {
+                Invitation(
+                    id = it.text("id").orEmpty(),
+                    eventId = it.text("eventId").orEmpty(),
+                    state = it.text("state").orEmpty(),
+                    passwordProtected =
+                        it["passwordProtected"]?.jsonPrimitive?.content == "true",
+                )
+            }
+
+    /** Says yes. The password, when the event has one, is typed here — the first moment it can be. */
+    fun acceptInvitation(id: String, password: String?) {
+        call(
+            "/api/v1/invitations/$id/accept",
+            buildJsonObject { if (!password.isNullOrBlank()) put("password", password) },
+        )
+    }
+
+    fun declineInvitation(id: String) {
+        call("/api/v1/invitations/$id/decline", buildJsonObject { })
+    }
+
+    /** Where this account is open. A phone left in a taxi is what this is for. */
+    fun sessions(): List<OpenSession> =
+        (call("/api/v1/sessions")["sessions"] as? JsonArray).orEmpty()
+            .map { it.jsonObject }
+            .map {
+                OpenSession(
+                    id = it.text("id").orEmpty(),
+                    current = it["current"]?.jsonPrimitive?.content == "true",
+                    userAgent = it.text("userAgent"),
+                    ipAddress = it.text("ipAddress"),
+                    lastSeenAt = it.text("lastSeenAt"),
+                )
+            }
+
+    fun revokeSession(id: String) {
+        call("/api/v1/sessions/$id", method = "DELETE")
+    }
+
+    /** A public name to be found by, so somebody can share without knowing an address. */
+    fun setHandle(handle: String): String =
+        call("/api/v1/me/handle", buildJsonObject { put("handle", handle) }, method = "PUT")
+            .text("handle")
+            .orEmpty()
+
+    fun handleTaken(handle: String): Boolean =
+        call("/api/v1/directory/handle?handle=" + java.net.URLEncoder.encode(handle, "UTF-8"))["taken"]
+            ?.jsonPrimitive?.content == "true"
+
+    /** Shares with somebody named the way people name each other, rather than by identifier. */
+    fun shareEventWithHandle(eventId: String, handle: String) {
+        call(
+            "/api/v1/events/$eventId/access",
+            buildJsonObject {
+                put("subjectKind", "USER")
+                put("handle", handle)
+            },
+        )
     }
 
     // --- Groups and sharing -------------------------------------------------------------
@@ -507,6 +611,34 @@ data class AccessEntry(val subjectKind: String, val subjectId: String, val label
 
 /** What an authenticator needs, in the two forms one might be given it. */
 data class TotpEnrolment(val secret: String, val uri: String)
+
+/** Something that happened, which the reader may not have been present for. */
+data class Notice(
+    val id: String,
+    val kind: String,
+    val eventId: String,
+    val eventName: String,
+    val invitedBy: String,
+    val createdAt: String,
+    val read: Boolean,
+)
+
+/** An event somebody offered. Nothing happens until it is answered. */
+data class Invitation(
+    val id: String,
+    val eventId: String,
+    val state: String,
+    val passwordProtected: Boolean,
+)
+
+/** One place this account is open, as the request that opened it described itself. */
+data class OpenSession(
+    val id: String,
+    val current: Boolean,
+    val userAgent: String?,
+    val ipAddress: String?,
+    val lastSeenAt: String?,
+)
 
 /** A document the server holds, as its listing describes it. The bytes are fetched separately. */
 data class RemoteDocument(val id: String, val mediaType: String, val pageCount: Int)

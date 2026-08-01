@@ -13,7 +13,11 @@ import java.util.Locale
  * behind the vault key would mean the app could not tell you which server it is configured for
  * until you had unlocked it.
  */
-class ServerSettings(context: Context) {
+class ServerSettings(
+    context: Context,
+    /** Seals the session token, so a restart does not mean signing in again. */
+    private val keys: com.mateof.passvault.data.DeviceKeys? = null,
+) {
 
     private val preferences = context.getSharedPreferences("passvault.server", Context.MODE_PRIVATE)
 
@@ -39,7 +43,31 @@ class ServerSettings(context: Context) {
     }
 
     fun clear() {
-        preferences.edit().remove(BASE_URL).apply()
+        preferences.edit().remove(BASE_URL).remove(SESSION_TOKEN).apply()
+    }
+
+    /**
+     * The session, kept until somebody says otherwise.
+     *
+     * It used to live only in memory, on the reasoning that a bearer token on disk is a bearer
+     * token somebody could steal. True, and it made the app sign in again on every start and
+     * every reinstall — for a wallet somebody opens at a turnstile, in a queue, with one hand.
+     *
+     * Sealed with the KeyStore key that already wraps the vault key, so what sits in preferences
+     * is useless on another device and useless here to anything that cannot ask the KeyStore. A
+     * reinstall generates a new KeyStore key, so the old token unseals to nothing and the app
+     * asks again — which is the correct outcome and the one thing this cannot avoid.
+     */
+    fun sessionToken(): String? {
+        val sealed = preferences.getString(SESSION_TOKEN, null) ?: return null
+        return keys?.open(sealed)
+    }
+
+    fun setSessionToken(token: String?) {
+        preferences.edit().apply {
+            if (token == null || keys == null) remove(SESSION_TOKEN)
+            else putString(SESSION_TOKEN, keys.seal(token))
+        }.apply()
     }
 
     /**
@@ -74,6 +102,7 @@ class ServerSettings(context: Context) {
 
     private companion object {
         const val BASE_URL = "base_url"
+        const val SESSION_TOKEN = "session_token"
         const val EVENT_PASSWORD = "event_password:"
     }
 }

@@ -20,7 +20,7 @@ android {
         // Raised by CI from the run number. Bumping it by hand is the usual
         // reason an update refuses to install.
         versionCode = (System.getenv("VERSION_CODE") ?: "1").toInt()
-        versionName = "0.10.0"
+        versionName = "0.11.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         resourceConfigurations += listOf("gl", "es", "en")
@@ -122,6 +122,7 @@ dependencies {
     // hardware key; without this only the latter is offered, which on most phones means none.
     implementation(libs.credentials.play.services)
     implementation(libs.datastore.preferences)
+    implementation(libs.work.runtime)
 
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.kotlinx.coroutines.android)
