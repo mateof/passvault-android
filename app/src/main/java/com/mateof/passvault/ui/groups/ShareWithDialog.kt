@@ -64,6 +64,43 @@ fun ShareWithDialog(
     onDismiss: () -> Unit,
 ) {
     val spacing = LocalSpacing.current
+    var confirmingRevoke by androidx.compose.runtime.remember {
+        androidx.compose.runtime.mutableStateOf<AccessEntry?>(null)
+    }
+
+    confirmingRevoke?.let { entry ->
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { confirmingRevoke = null },
+            title = { Text(stringResource(R.string.sharing_revoke)) },
+            text = {
+                Text(
+                    stringResource(
+                        // The truth for this person: a clean removal when they have not pulled it
+                        // yet, an honest "cannot take it back" when they have.
+                        if (entry.downloaded) R.string.sharing_revoke_confirm_downloaded
+                        else R.string.sharing_revoke_confirm_clean,
+                    ),
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    val chosen = entry
+                    confirmingRevoke = null
+                    onRevoke(chosen)
+                }) {
+                    Text(
+                        text = stringResource(R.string.sharing_revoke),
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmingRevoke = null }) {
+                    Text(stringResource(R.string.action_cancel))
+                }
+            },
+        )
+    }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -104,14 +141,29 @@ fun ShareWithDialog(
                                 },
                                 contentDescription = null,
                             )
-                            Text(
-                                text = entry.label.ifBlank { entry.subjectId.take(8) },
+                            Column(
                                 modifier = Modifier
                                     .weight(1f)
                                     .padding(start = spacing.small),
-                                style = MaterialTheme.typography.bodyMedium,
-                            )
-                            TextButton(onClick = { onRevoke(entry) }) {
+                            ) {
+                                Text(
+                                    text = entry.label.ifBlank { entry.subjectId.take(8) },
+                                    style = MaterialTheme.typography.bodyMedium,
+                                )
+                                // The state that decides what revoking can promise, on the row.
+                                Text(
+                                    text = stringResource(
+                                        when {
+                                            entry.pending -> R.string.sharing_state_pending
+                                            entry.downloaded -> R.string.sharing_state_downloaded
+                                            else -> R.string.sharing_state_not_downloaded
+                                        },
+                                    ),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                            TextButton(onClick = { confirmingRevoke = entry }) {
                                 Text(stringResource(R.string.sharing_revoke))
                             }
                         }

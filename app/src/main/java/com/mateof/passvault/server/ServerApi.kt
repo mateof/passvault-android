@@ -671,6 +671,8 @@ class ServerApi(private val settings: ServerSettings) {
                     subjectKind = it.text("subjectKind").orEmpty(),
                     subjectId = it.text("subjectId").orEmpty(),
                     label = it.text("label").orEmpty(),
+                    downloaded = it["downloaded"]?.jsonPrimitive?.content == "true",
+                    pending = it["pending"]?.jsonPrimitive?.content == "true",
                 )
             }
 
@@ -805,7 +807,15 @@ data class GroupMember(
 }
 
 /** A group or a person an event is shared with, named the way its owner thinks of them. */
-data class AccessEntry(val subjectKind: String, val subjectId: String, val label: String)
+data class AccessEntry(
+    val subjectKind: String,
+    val subjectId: String,
+    val label: String,
+    /** True once this person has pulled the event: after it, revoking cannot recall the tickets. */
+    val downloaded: Boolean = false,
+    /** Offered and not yet accepted, so there is nothing to download and nothing to warn about. */
+    val pending: Boolean = false,
+)
 
 /** What an authenticator needs, in the two forms one might be given it. */
 data class TotpEnrolment(val secret: String, val uri: String)

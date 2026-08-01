@@ -327,7 +327,11 @@ class ServerViewModel @Inject constructor(
      * than after pressing save. The check is a courtesy; the unique index on the server is what
      * actually decides, and a lost race comes back as the same sentence.
      */
-    fun checkHandle(value: String) {
+    fun checkHandle(rawValue: String) {
+        // Sanitised as they type, so a Spanish or Galician name — a capital, a space, an accent,
+        // all three forbidden by the server — becomes a handle it accepts instead of a late
+        // error. "Mateo Fernández" turns into mateo-fernandez in front of them.
+        val value = slugifyHandle(rawValue)
         _state.value = _state.value.copy(handle = value, handleTaken = null, handleSaved = false)
         val trimmed = value.trim()
         if (trimmed.length < 3) return
@@ -485,6 +489,23 @@ class ServerViewModel @Inject constructor(
         }
     }
 }
+
+
+/**
+ * Turns whatever someone types into a handle the server will accept.
+ *
+ * Its rule is narrow on purpose — lower case, digits, dot, dash, underscore — and a Spanish or
+ * Galician name walks straight into it: "Mateo Fernández" has a capital, a space and an accent,
+ * all three forbidden. Decomposing to base letters drops the accents; everything outside the set
+ * collapses to a single dash. The result is what the field shows and what gets saved.
+ */
+private fun slugifyHandle(value: String): String =
+    java.text.Normalizer.normalize(value, java.text.Normalizer.Form.NFD)
+        .replace(Regex("\\p{Mn}+"), "")
+        .lowercase()
+        .replace(Regex("[^a-z0-9._-]+"), "-")
+        .replace(Regex("^[._-]+"), "")
+        .take(32)
 
 enum class ServerStage { Address, SignIn, SecondFactor, Vault, Ready }
 

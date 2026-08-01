@@ -355,4 +355,9 @@
     <string name="notice_tickets_deleted_device">Tickets deleted on this phone. If a server holds them, they will return at the next sync.</string>
     <string name="settings_device_name">This device’s name</string>
     <string name="settings_device_name_explain">The name others see: in the sharing list and in the server’s session list.</string>
+    <string name="sharing_state_pending">not yet accepted</string>
+    <string name="sharing_state_downloaded">already downloaded</string>
+    <string name="sharing_state_not_downloaded">not downloaded yet</string>
+    <string name="sharing_revoke_confirm_clean">This person has not downloaded the event yet, so revoking removes it from them entirely. Continue?</string>
+    <string name="sharing_revoke_confirm_downloaded">This person has already downloaded the event to their device. Revoking stops them syncing new changes, but does not delete what they already hold — that only goes if they delete it themselves. Continue?</string>
 </resources>

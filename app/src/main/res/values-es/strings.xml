@@ -355,4 +355,9 @@
     <string name="notice_tickets_deleted_device">Entradas eliminadas en este móvil. Si un servidor las guarda, volverán al sincronizar.</string>
     <string name="settings_device_name">Nombre de este dispositivo</string>
     <string name="settings_device_name_explain">Es el nombre que ven los demás: en la lista al compartir y en las sesiones del servidor.</string>
+    <string name="sharing_state_pending">sin aceptar</string>
+    <string name="sharing_state_downloaded">ya descargado</string>
+    <string name="sharing_state_not_downloaded">aún no descargado</string>
+    <string name="sharing_revoke_confirm_clean">Esta persona aún no ha descargado el evento, así que quitarle el acceso lo elimina por completo para ella. ¿Continuar?</string>
+    <string name="sharing_revoke_confirm_downloaded">Esta persona ya ha descargado el evento en su dispositivo. Quitar el acceso impide que sincronice cambios nuevos, pero no borra lo que ya tiene: eso solo desaparece si ella lo elimina. ¿Continuar?</string>
 </resources>
