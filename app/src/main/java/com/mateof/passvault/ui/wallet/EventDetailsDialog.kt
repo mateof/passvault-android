@@ -46,16 +46,21 @@ import com.mateof.passvault.ui.theme.LocalSpacing
 @Composable
 fun EventDetailsDialog(
     startsAt: String?,
+    venue: String?,
     tags: List<Tag>,
     chosenTagIds: List<String>,
     onDismiss: () -> Unit,
-    onSave: (startsAt: String?, tagIds: List<String>) -> Unit,
+    onSave: (startsAt: String?, venue: String?, tagIds: List<String>) -> Unit,
+    /** Makes a label here rather than three screens away, which is where the wish arises. */
+    onCreateTag: (name: String, colour: String) -> Unit,
 ) {
     val spacing = LocalSpacing.current
     val existing = remember(startsAt) { splitInstant(startsAt) }
     var date by remember { mutableStateOf(existing.first) }
     var time by remember { mutableStateOf(existing.second) }
+    var where by remember { mutableStateOf(venue.orEmpty()) }
     var chosen by remember(chosenTagIds) { mutableStateOf(chosenTagIds.toSet()) }
+    var newTagName by remember { mutableStateOf("") }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -78,13 +83,20 @@ fun EventDetailsDialog(
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     modifier = Modifier.fillMaxWidth(),
                 )
+                OutlinedTextField(
+                    value = where,
+                    onValueChange = { where = it },
+                    label = { Text(stringResource(R.string.event_venue)) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
 
+                HorizontalDivider()
+                Text(
+                    text = stringResource(R.string.tags_of_event),
+                    style = MaterialTheme.typography.labelLarge,
+                )
                 if (tags.isNotEmpty()) {
-                    HorizontalDivider()
-                    Text(
-                        text = stringResource(R.string.tags_of_event),
-                        style = MaterialTheme.typography.labelLarge,
-                    )
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(spacing.tight)) {
                         for (tag in tags) {
                             TagChip(
@@ -98,10 +110,38 @@ fun EventDetailsDialog(
                         }
                     }
                 }
+                // A new label, made without leaving. The colour is picked for them — recolouring
+                // afterwards on the labels screen is one tap, and a dialog inside a dialog is not.
+                androidx.compose.foundation.layout.Row(
+                    horizontalArrangement = Arrangement.spacedBy(spacing.tight),
+                    verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+                ) {
+                    OutlinedTextField(
+                        value = newTagName,
+                        onValueChange = { newTagName = it },
+                        label = { Text(stringResource(R.string.tags_name)) },
+                        singleLine = true,
+                        modifier = Modifier.weight(1f),
+                    )
+                    TextButton(
+                        onClick = {
+                            onCreateTag(
+                                newTagName.trim(),
+                                // Spread over the palette by count, so five quick labels do not
+                                // come out as five identical violet dots.
+                                listOf("violet", "blue", "teal", "green", "amber", "orange", "red", "pink")[tags.size % 8],
+                            )
+                            newTagName = ""
+                        },
+                        enabled = newTagName.isNotBlank(),
+                    ) {
+                        Text(stringResource(R.string.tags_create_short))
+                    }
+                }
             }
         },
         confirmButton = {
-            TextButton(onClick = { onSave(instantOf(date, time), chosen.toList()) }) {
+            TextButton(onClick = { onSave(instantOf(date, time), where.trim(), chosen.toList()) }) {
                 Text(stringResource(R.string.action_save))
             }
         },

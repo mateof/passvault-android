@@ -271,8 +271,29 @@ class WalletViewModel @Inject constructor(
         viewModelScope.launch { repository.setEventMark(eventId, icon, colour) }
     }
 
-    fun setEventStart(eventId: String, startsAt: String?) {
-        viewModelScope.launch { repository.setEventStart(eventId, startsAt) }
+    fun setEventFacts(eventId: String, startsAt: String?, venue: String?) {
+        viewModelScope.launch {
+            repository.setEventFacts(
+                eventId = eventId,
+                startsAt = startsAt,
+                venue = venue,
+                startsAtTouched = true,
+                venueTouched = true,
+            )
+        }
+    }
+
+    /**
+     * Makes a label without leaving whatever screen wanted it.
+     *
+     * The moment somebody wants "Vigo" on an event is the moment the label does not exist yet,
+     * and a round trip through the labels screen loses them.
+     */
+    fun createTag(name: String, colour: String) {
+        viewModelScope.launch {
+            withContext(Dispatchers.IO) { runCatching { api.createTag(name, colour) } }
+            refreshTags()
+        }
     }
 
     private val _events = MutableStateFlow<ImportOutcome?>(null)

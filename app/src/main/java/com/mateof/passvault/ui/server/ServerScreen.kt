@@ -398,6 +398,13 @@ private fun HandleSection(
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
+    // What you are called right now, before any field: the question this section answers first
+    // is "do I have a name", and a form alone cannot answer it.
+    Text(
+        text = state.currentHandle?.let { stringResource(R.string.handle_current, it) }
+            ?: stringResource(R.string.handle_none),
+        style = MaterialTheme.typography.bodyMedium,
+    )
     OutlinedTextField(
         value = state.handle,
         onValueChange = onHandleChanged,

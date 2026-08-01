@@ -39,11 +39,18 @@ class SharingViewModel @Inject constructor(
             _state.value = _state.value.copy(loading = true, failure = null)
             loadEventPassword(eventId)
             val loaded = withContext(Dispatchers.IO) {
-                runCatching { api.eventAccess(eventId) to api.groups() }
+                runCatching {
+                    Triple(api.eventAccess(eventId), api.groups(), api.eventPassword(eventId))
+                }
             }
             _state.value = loaded.fold(
-                onSuccess = { (access, groups) ->
-                    _state.value.copy(loading = false, access = access, groups = groups)
+                onSuccess = { (access, groups, password) ->
+                    _state.value.copy(
+                        loading = false,
+                        access = access,
+                        groups = groups,
+                        serverPassword = password,
+                    )
                 },
                 onFailure = { _state.value.copy(loading = false, failure = describe(it)) },
             )
@@ -91,6 +98,16 @@ class SharingViewModel @Inject constructor(
                 _state.value = _state.value.copy(addressKnown = found.getOrNull())
             }
         }
+    }
+
+    /**
+     * Changes the event password on the server, or removes it.
+     *
+     * The creator's act: the server refuses anybody else. Members who already opened the event
+     * this session stay in; new openings ask for the new one — which is what changing means.
+     */
+    fun changeServerPassword(eventId: String, password: String?) = act(eventId) {
+        api.setEventPasswordOnServer(eventId, password)
     }
 
     fun shareWithGroup(eventId: String, groupId: String) = act(eventId) {

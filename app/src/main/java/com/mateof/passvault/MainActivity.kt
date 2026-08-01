@@ -422,12 +422,14 @@ private fun PassVaultApp(
                             viewModel.setEventMark(current.id, chosenIcon, chosenColour)
                         },
                         startsAt = row?.startsAt,
+                        venue = row?.venue,
                         tags = eventsState.tags,
                         tagIds = row?.tagIds.orEmpty(),
-                        onDetailsSaved = { startsAt, tagIds ->
-                            viewModel.setEventStart(current.id, startsAt)
-                            // Labels go to the server and the date to the log: one is what this
-                            // event is to this account, the other is a fact about the event.
+                        onCreateTag = viewModel::createTag,
+                        onDetailsSaved = { startsAt, venue, tagIds ->
+                            viewModel.setEventFacts(current.id, startsAt, venue)
+                            // Labels go to the server and the facts to the log: one is what this
+                            // event is to this account, the others are facts about the event.
                             viewModel.setEventTags(current.id, tagIds)
                         },
                         onShare = { chosen ->
@@ -632,9 +634,11 @@ private fun EventPane(
     onMarkChosen: (String, String) -> Unit,
     /** When it is, as stored. Null for an event nobody has dated. */
     startsAt: String?,
+    venue: String?,
     tags: List<com.mateof.passvault.server.Tag>,
     tagIds: List<String>,
-    onDetailsSaved: (String?, List<String>) -> Unit,
+    onCreateTag: (String, String) -> Unit,
+    onDetailsSaved: (String?, String?, List<String>) -> Unit,
     /** Null shares the whole event; a set shares exactly those tickets. */
     onShare: (Set<String>?) -> Unit,
     /** The same scope, written to a file instead of handed to a phone in the room. */
@@ -668,6 +672,8 @@ private fun EventPane(
             groups = sharingState.groups,
             eventPassword = sharingState.eventPassword,
             onEventPasswordChanged = { sharing.setEventPassword(eventId, it) },
+            serverPassword = sharingState.serverPassword,
+            onChangeServerPassword = { sharing.changeServerPassword(eventId, it) },
             pendingEmail = sharingState.pendingEmail,
             addressKnown = sharingState.addressKnown,
             failure = sharingState.failure,
@@ -684,12 +690,14 @@ private fun EventPane(
     if (editingDetails) {
         com.mateof.passvault.ui.wallet.EventDetailsDialog(
             startsAt = startsAt,
+            venue = venue,
             tags = tags,
             chosenTagIds = tagIds,
             onDismiss = { editingDetails = false },
-            onSave = { when_, chosen ->
+            onCreateTag = onCreateTag,
+            onSave = { when_, where, chosen ->
                 editingDetails = false
-                onDetailsSaved(when_, chosen)
+                onDetailsSaved(when_, where, chosen)
             },
         )
     }

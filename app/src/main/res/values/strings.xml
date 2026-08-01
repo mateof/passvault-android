@@ -278,4 +278,12 @@
     <string name="handle_save">Gardar</string>
     <string name="sharing_with_handle">Compartir por nome de usuario</string>
     <string name="sharing_person_or_handle">Correo ou nome de usuario</string>
+    <string name="event_venue">Lugar</string>
+    <string name="tags_create_short">Crear</string>
+    <string name="handle_current">O teu nome agora mesmo: @%1$s</string>
+    <string name="handle_none">Aínda non tes nome de usuario.</string>
+    <string name="event_password_current">Contrasinal deste evento</string>
+    <string name="event_password_new">Contrasinal novo</string>
+    <string name="event_password_change">Cambiar o contrasinal</string>
+    <string name="action_copy">Copiar</string>
 </resources>

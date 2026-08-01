@@ -102,20 +102,30 @@ class WalletRepository(
     }
 
     /**
-     * Says when an event is.
+     * Says when an event is and where.
      *
      * Through the log rather than straight into the row, unlike the mark. A colour is a local
-     * preference; a date is a fact about the event, so it travels to the other phones and to
-     * whoever it is shared with — which is what the log is for.
+     * preference; a date and a venue are facts about the event, so they travel to the other
+     * phones and to whoever it is shared with — which is what the log is for.
      *
-     * A null clears it. `event.update` treats a missing field as "unchanged", so removing a date
-     * has to be said out loud rather than by omission.
+     * A null clears its field, written as an empty string: `event.update` treats a missing field
+     * as "unchanged", so removing something has to be said out loud rather than by omission.
+     * A field the caller did not touch is simply not written.
      */
-    suspend fun setEventStart(eventId: String, startsAt: String?) {
+    suspend fun setEventFacts(
+        eventId: String,
+        startsAt: String? = null,
+        venue: String? = null,
+        startsAtTouched: Boolean = true,
+        venueTouched: Boolean = false,
+    ) {
         log.append(
             eventId,
             OperationType.EVENT_UPDATE,
-            buildJsonObject { put("startsAt", startsAt ?: "") },
+            buildJsonObject {
+                if (startsAtTouched) put("startsAt", startsAt ?: "")
+                if (venueTouched) put("venue", venue ?: "")
+            },
         )
         project(log.replay(eventId))
     }

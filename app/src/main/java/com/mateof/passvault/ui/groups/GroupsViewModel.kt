@@ -159,6 +159,8 @@ data class GroupsUiState(
 data class SharingUiState(
     /** Chosen before the event exists there, and used by the synchronisation that creates it. */
     val eventPassword: String = "",
+    /** The password the server holds now, readable by the creator alone. Null for none. */
+    val serverPassword: String? = null,
     val access: List<AccessEntry> = emptyList(),
     val groups: List<Group> = emptyList(),
     val loading: Boolean = true,

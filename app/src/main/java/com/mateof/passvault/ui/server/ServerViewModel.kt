@@ -223,8 +223,18 @@ class ServerViewModel @Inject constructor(
     fun loadSessions() {
         if (!api.isSignedIn) return
         viewModelScope.launch {
-            val loaded = withContext(Dispatchers.IO) { runCatching { api.sessions() } }
-            loaded.onSuccess { _state.value = _state.value.copy(sessions = it) }
+            val loaded = withContext(Dispatchers.IO) {
+                runCatching { api.sessions() to api.me() }
+            }
+            loaded.onSuccess { (sessions, account) ->
+                _state.value = _state.value.copy(
+                    sessions = sessions,
+                    currentHandle = account.handle,
+                    // Prefilled so "change my name" starts from the name, not from an empty
+                    // field and a doubt about whether one was ever chosen.
+                    handle = _state.value.handle.ifBlank { account.handle.orEmpty() },
+                )
+            }
         }
     }
 
@@ -417,6 +427,8 @@ enum class ServerStage { Address, SignIn, SecondFactor, Vault, Ready }
 data class ServerUiState(
     /** Where this account is open. Empty until the ready screen asks. */
     val sessions: List<com.mateof.passvault.server.OpenSession> = emptyList(),
+    /** The name this account already has, from /me. Null until one is chosen. */
+    val currentHandle: String? = null,
     /** The public name being typed, and whether anybody already has it. */
     val handle: String = "",
     val handleTaken: Boolean? = null,

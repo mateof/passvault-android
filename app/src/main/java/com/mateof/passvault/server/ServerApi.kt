@@ -164,6 +164,9 @@ class ServerApi(private val settings: ServerSettings) {
             userId = result.text("userId").orEmpty(),
             isAdmin = result["isAdmin"]?.jsonPrimitive?.content == "true",
             vaultUnlocked = result["vaultUnlocked"]?.jsonPrimitive?.content == "true",
+            // Null until one is chosen. A client that cannot see it cannot tell "you have no
+            // name" from "we never asked", which is how somebody sets the same handle twice.
+            handle = result.text("handle"),
         )
     }
 
@@ -315,6 +318,29 @@ class ServerApi(private val settings: ServerSettings) {
             }
             return response.body?.bytes()
         }
+    }
+
+    /**
+     * The creator's readable copy of an event password. Null for none, and null for anybody who
+     * is not the creator — asked with a catch rather than a permission check, because whether
+     * this phone created the event is exactly what the server knows and the phone may not.
+     */
+    fun eventPassword(eventId: String): String? = try {
+        call("/api/v1/events/$eventId/password").text("password")
+    } catch (refused: ServerException) {
+        if (refused.status == 403 || refused.status == 404) null else throw refused
+    }
+
+    /** Sets, changes or (with null) removes the event password. Creator only; the server enforces it. */
+    fun setEventPasswordOnServer(eventId: String, password: String?) {
+        call(
+            "/api/v1/events/$eventId/password",
+            buildJsonObject {
+                if (password == null) put("password", kotlinx.serialization.json.JsonNull)
+                else put("password", password)
+            },
+            method = "PUT",
+        )
     }
 
     // --- Labels ---------------------------------------------------------------------------
@@ -719,7 +745,12 @@ data class OpenSession(
 /** A document the server holds, as its listing describes it. The bytes are fetched separately. */
 data class RemoteDocument(val id: String, val mediaType: String, val pageCount: Int)
 
-data class Account(val userId: String, val isAdmin: Boolean, val vaultUnlocked: Boolean)
+data class Account(
+    val userId: String,
+    val isAdmin: Boolean,
+    val vaultUnlocked: Boolean,
+    val handle: String? = null,
+)
 
 sealed interface SignInOutcome {
     data class SignedIn(val userId: String) : SignInOutcome

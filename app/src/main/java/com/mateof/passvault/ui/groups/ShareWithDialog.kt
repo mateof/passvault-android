@@ -49,6 +49,9 @@ fun ShareWithDialog(
     groups: List<Group>,
     eventPassword: String,
     onEventPasswordChanged: (String) -> Unit,
+    /** The password the server holds, for the creator to see, copy and change. */
+    serverPassword: String?,
+    onChangeServerPassword: (String?) -> Unit,
     pendingEmail: String,
     addressKnown: Boolean?,
     failure: String?,
@@ -126,16 +129,52 @@ fun ShareWithDialog(
 
                 // A password is a decision about who can decrypt at all, not a second lock in
                 // front of something the server can already read — so it belongs beside the list
-                // of people this is being handed to. Applied when the event first reaches the
-                // server; after that there is nothing to apply it to.
+                // of people this is being handed to.
+                if (serverPassword != null) {
+                    // The copy the creator keeps: its job is social as well as cryptographic,
+                    // because whoever set it has to tell it to their friends weeks later, and
+                    // "I chose it in March" is not a password.
+                    val clipboard = androidx.compose.ui.platform.LocalClipboardManager.current
+                    Text(
+                        text = stringResource(R.string.event_password_current),
+                        style = MaterialTheme.typography.labelLarge,
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            text = serverPassword,
+                            style = MaterialTheme.typography.bodyLarge,
+                            modifier = Modifier.weight(1f),
+                        )
+                        TextButton(onClick = {
+                            clipboard.setText(androidx.compose.ui.text.AnnotatedString(serverPassword))
+                        }) {
+                            Text(stringResource(R.string.action_copy))
+                        }
+                    }
+                }
                 OutlinedTextField(
                     value = eventPassword,
                     onValueChange = onEventPasswordChanged,
-                    label = { Text(stringResource(R.string.event_password)) },
+                    label = {
+                        Text(
+                            stringResource(
+                                if (serverPassword == null) R.string.event_password
+                                else R.string.event_password_new,
+                            ),
+                        )
+                    },
                     singleLine = true,
                     supportingText = { Text(stringResource(R.string.event_password_help)) },
                     modifier = Modifier.fillMaxWidth(),
                 )
+                if (serverPassword != null && eventPassword.isNotBlank()) {
+                    TextButton(onClick = { onChangeServerPassword(eventPassword) }) {
+                        Text(stringResource(R.string.event_password_change))
+                    }
+                }
 
                 Divider(modifier = Modifier.padding(vertical = spacing.small))
 
