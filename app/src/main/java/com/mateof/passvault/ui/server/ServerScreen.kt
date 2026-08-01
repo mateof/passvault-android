@@ -56,6 +56,7 @@ fun ServerScreen(
     /** Hands the `otpauth:` link to whichever authenticator is installed. */
     onOpenUri: (String) -> Unit,
     onSignOut: () -> Unit,
+    onOpenAdmin: () -> Unit,
     sharingEventName: String? = null,
     modifier: Modifier = Modifier,
 ) {
@@ -91,6 +92,7 @@ fun ServerScreen(
                     onSync,
                     onForget,
                     onSignOut,
+                    onOpenAdmin,
                     onAddPasskey,
                     onEnrolTotp,
                     onConfirmTotp,
@@ -323,6 +325,7 @@ private fun ReadyStep(
     onSync: () -> Unit,
     onForget: () -> Unit,
     onSignOut: () -> Unit,
+    onOpenAdmin: () -> Unit,
     onAddPasskey: () -> Unit,
     onEnrolTotp: () -> Unit,
     onConfirmTotp: (String) -> Unit,
@@ -381,6 +384,13 @@ private fun ReadyStep(
         }
     }
 
+    if (state.isAdmin) {
+        // Administration stays a web job — registration modes and user lists have no place on a
+        // phone screen — but the person holding the keys should not have to remember the path.
+        OutlinedButton(onClick = onOpenAdmin, modifier = Modifier.fillMaxWidth()) {
+            Text(stringResource(R.string.server_open_admin))
+        }
+    }
     // Signing out is "not me, not now"; forgetting is "not this server". Both belong here,
     // said apart, because they undo different amounts.
     TextButton(onClick = onSignOut) { Text(stringResource(R.string.profile_sign_out)) }

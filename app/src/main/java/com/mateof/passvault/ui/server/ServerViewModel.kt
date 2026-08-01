@@ -164,6 +164,8 @@ class ServerViewModel @Inject constructor(
         }
     }
 
+    fun adminUrl(): String = api.adminUrl()
+
     fun uiLocale(): String? = settings.uiLocale()
 
     fun setUiLocale(tag: String?) = settings.setUiLocale(tag)
@@ -260,6 +262,7 @@ class ServerViewModel @Inject constructor(
                 _state.value = _state.value.copy(
                     sessions = sessions,
                     currentHandle = account.handle,
+                    isAdmin = account.isAdmin,
                     // Prefilled so "change my name" starts from the name, not from an empty
                     // field and a doubt about whether one was ever chosen.
                     handle = _state.value.handle.ifBlank { account.handle.orEmpty() },
@@ -457,6 +460,8 @@ enum class ServerStage { Address, SignIn, SecondFactor, Vault, Ready }
 data class ServerUiState(
     /** Where this account is open. Empty until the ready screen asks. */
     val sessions: List<com.mateof.passvault.server.OpenSession> = emptyList(),
+    /** Whether this account runs the installation, and so should be offered the admin door. */
+    val isAdmin: Boolean = false,
     /** The name this account already has, from /me. Null until one is chosen. */
     val currentHandle: String? = null,
     /** The public name being typed, and whether anybody already has it. */

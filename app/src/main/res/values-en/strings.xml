@@ -290,4 +290,10 @@
     <string name="settings_language_system">System</string>
     <string name="event_when_pick_date">Pick on the calendar</string>
     <string name="event_when_pick_time">Pick on the clock</string>
+    <string name="server_open_admin">Open administration (web)</string>
+    <string name="sessions_detail_client">Client</string>
+    <string name="sessions_detail_ip">IP address</string>
+    <string name="sessions_detail_created">Started</string>
+    <string name="sessions_detail_last">Last used</string>
+    <string name="sessions_detail_expires">Expires</string>
 </resources>

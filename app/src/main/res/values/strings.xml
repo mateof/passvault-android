@@ -296,4 +296,10 @@
     <string name="settings_language_system">O do sistema</string>
     <string name="event_when_pick_date">Escoller no calendario</string>
     <string name="event_when_pick_time">Escoller no reloxo</string>
+    <string name="server_open_admin">Abrir a administración (web)</string>
+    <string name="sessions_detail_client">Cliente</string>
+    <string name="sessions_detail_ip">Enderezo IP</string>
+    <string name="sessions_detail_created">Iniciada</string>
+    <string name="sessions_detail_last">Último uso</string>
+    <string name="sessions_detail_expires">Caduca</string>
 </resources>

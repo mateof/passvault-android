@@ -39,6 +39,18 @@ class ServerApi(private val settings: ServerSettings) {
     private val client = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(30, TimeUnit.SECONDS)
+        // The app says what it is and what it runs on. The default "okhttp/4.x" names a
+        // library, and the session list is read by a person looking for their own phone.
+        .addInterceptor { chain ->
+            chain.proceed(
+                chain.request().newBuilder()
+                    .header(
+                        "User-Agent",
+                        "PassVault Android (${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL})",
+                    )
+                    .build(),
+            )
+        }
         .build()
 
     private val jsonType = "application/json; charset=utf-8".toMediaType()
@@ -70,6 +82,22 @@ class ServerApi(private val settings: ServerSettings) {
         path: String,
         body: JsonObject? = null,
         method: String = if (body == null) "GET" else "POST",
+    ): JsonObject = callOnce(path, body, method, retryOnLockedVault = true)
+
+    /**
+     * One request, with one self-service retry for a vault the server forgot.
+     *
+     * The server drops its unwrapped keys on every restart, by design, and answers 423 until the
+     * passphrase is given again. This phone keeps that passphrase sealed under its KeyStore, so
+     * the honest response to a 423 is to unlock and try once more — not to surface an error to
+     * a screen that can do nothing about it. The retry happened only inside the synchroniser at
+     * first, which left every other feature quietly broken after a server update.
+     */
+    private fun callOnce(
+        path: String,
+        body: JsonObject? = null,
+        method: String = if (body == null) "GET" else "POST",
+        retryOnLockedVault: Boolean = false,
     ): JsonObject {
         val request = Request.Builder()
             .url(url(path))
@@ -94,6 +122,27 @@ class ServerApi(private val settings: ServerSettings) {
             val text = response.body?.string().orEmpty()
             val parsed = runCatching { Json.parseToJsonElement(text).jsonObject }.getOrNull()
             if (!response.isSuccessful) {
+                val code = parsed?.text("code") ?: parsed?.text("error")
+                if (
+                    retryOnLockedVault &&
+                    response.code == 423 &&
+                    code == "vault.passphraseRequired"
+                ) {
+                    val passphrase = settings.vaultPassphrase()
+                    if (passphrase != null) {
+                        val unlocked = runCatching {
+                            callOnce(
+                                "/api/v1/vault/unlock",
+                                buildJsonObject { put("passphrase", passphrase) },
+                            )
+                        }.isSuccess
+                        if (unlocked) {
+                            // Once. A second 423 after a successful unlock is a different
+                            // problem, and looping on it would hide whatever it is.
+                            return callOnce(path, body, method, retryOnLockedVault = false)
+                        }
+                    }
+                }
                 throw ServerException(
                     status = response.code,
                     // The server's own message when there is one. A code translated here would be
@@ -102,7 +151,7 @@ class ServerApi(private val settings: ServerSettings) {
                         ?: "HTTP ${response.code}",
                     // The machine-readable key rides in `error`; a caller deciding what a 423
                     // means needs the key, not the sentence.
-                    code = parsed?.text("code") ?: parsed?.text("error"),
+                    code = code,
                 )
             }
             return parsed ?: JsonObject(emptyMap())
@@ -159,6 +208,9 @@ class ServerApi(private val settings: ServerSettings) {
         token = null
         settings.setSessionToken(null)
     }
+
+    /** Where the web administration lives, for a phone that wants to open it. */
+    fun adminUrl(): String = settings.baseUrl().trimEnd('/') + "/admin"
 
     fun me(): Account {
         val result = call("/api/v1/me")
@@ -471,6 +523,8 @@ class ServerApi(private val settings: ServerSettings) {
         call("/api/v1/invitations/$id/decline", buildJsonObject { })
     }
 
+    val baseUrl: String get() = settings.baseUrl()
+
     /** Where this account is open. A phone left in a taxi is what this is for. */
     fun sessions(): List<OpenSession> =
         (call("/api/v1/sessions")["sessions"] as? JsonArray).orEmpty()
@@ -481,7 +535,9 @@ class ServerApi(private val settings: ServerSettings) {
                     current = it["current"]?.jsonPrimitive?.content == "true",
                     userAgent = it.text("userAgent"),
                     ipAddress = it.text("ipAddress"),
+                    createdAt = it.text("createdAt"),
                     lastSeenAt = it.text("lastSeenAt"),
+                    expiresAt = it.text("expiresAt"),
                 )
             }
 
@@ -751,8 +807,32 @@ data class OpenSession(
     val current: Boolean,
     val userAgent: String?,
     val ipAddress: String?,
-    val lastSeenAt: String?,
-)
+    val createdAt: String? = null,
+    val lastSeenAt: String? = null,
+    val expiresAt: String? = null,
+) {
+    /**
+     * The client as a person would name it.
+     *
+     * A browser announces itself in a hundred characters of lineage; the app announces the phone
+     * model. A row has space for a name, and the whole string is in the detail dialog for
+     * whoever wants it.
+     */
+    val clientName: String
+        get() {
+            val agent = userAgent ?: return ""
+            return when {
+                agent.startsWith("PassVault Android") ->
+                    agent.substringAfter('(').substringBefore(')').ifBlank { agent }
+                "Firefox" in agent -> "Firefox"
+                "Edg" in agent -> "Edge"
+                "OPR" in agent || "Opera" in agent -> "Opera"
+                "Chrome" in agent -> "Chrome"
+                "Safari" in agent -> "Safari"
+                else -> agent.take(40)
+            }
+        }
+}
 
 /** A document the server holds, as its listing describes it. The bytes are fetched separately. */
 data class RemoteDocument(val id: String, val mediaType: String, val pageCount: Int)

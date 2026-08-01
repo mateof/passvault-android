@@ -933,6 +933,12 @@ private fun ServerPane(
             onEnrolTotp = viewModel::enrolTotp,
             onConfirmTotp = viewModel::confirmTotp,
             onSignOut = viewModel::signOut,
+            onOpenAdmin = {
+                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(viewModel.adminUrl()))
+                if (intent.resolveActivity(context.packageManager) != null) {
+                    context.startActivity(intent)
+                }
+            },
             onOpenUri = { uri ->
                 // Whatever registered for `otpauth:` — Google Authenticator, Microsoft
                 // Authenticator, Aegis, a password manager. If nothing did, the key is on

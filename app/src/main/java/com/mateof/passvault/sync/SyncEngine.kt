@@ -53,14 +53,6 @@ class SyncEngine @Inject constructor(
             return@withLock SyncOutcome.NotConfigured
         }
         withContext(Dispatchers.IO) {
-            // The server forgets unwrapped keys on every restart, by design. The passphrase this
-            // phone keeps sealed is what turns that from "sign in again" into nothing at all.
-            settings.vaultPassphrase()?.let { passphrase ->
-                runCatching { api.unlockVault(passphrase) }
-            }
-            Unit
-        }
-        withContext(Dispatchers.IO) {
             runCatching { exchange() }.fold(
                 onSuccess = { SyncOutcome.Done(it) },
                 onFailure = { cause ->
