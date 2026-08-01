@@ -41,6 +41,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.automirrored.filled.Sort
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Label
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -267,20 +271,56 @@ private fun Toolbar(
                 onClick = { onShowPast(!showPast) },
                 label = { Text(stringResource(R.string.events_show_past)) },
             )
-        }
 
-        if (tags.isNotEmpty()) {
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(spacing.small),
-                modifier = Modifier.horizontalScroll(rememberScrollState()),
-            ) {
-                for (tag in tags) {
-                    com.mateof.passvault.ui.tags.TagChip(
-                        name = tag.name,
-                        colour = tag.colour,
-                        selected = tagFilter == null || tagFilter == tag.id,
-                        onClick = { onTagFilter(tag.id) },
+            if (tags.isNotEmpty()) {
+                // One control, not a strip. A dozen labels laid out as chips took more of the
+                // screen than the events did; a menu holds any number and the chip itself says
+                // which filter is on — and clears it with the little cross.
+                var tagMenuOpen by remember { mutableStateOf(false) }
+                val active = tags.firstOrNull { it.id == tagFilter }
+                Box {
+                    FilterChip(
+                        selected = active != null,
+                        onClick = { tagMenuOpen = true },
+                        label = {
+                            Text(active?.name ?: stringResource(R.string.events_filter_tag))
+                        },
+                        leadingIcon = {
+                            Icon(Icons.Filled.Label, contentDescription = null)
+                        },
+                        trailingIcon = if (active != null) {
+                            {
+                                Icon(
+                                    imageVector = Icons.Filled.Close,
+                                    contentDescription =
+                                        stringResource(R.string.events_filter_clear),
+                                    modifier = Modifier.clickable { onTagFilter(active.id) },
+                                )
+                            }
+                        } else {
+                            null
+                        },
                     )
+                    DropdownMenu(
+                        expanded = tagMenuOpen,
+                        onDismissRequest = { tagMenuOpen = false },
+                    ) {
+                        for (tag in tags) {
+                            DropdownMenuItem(
+                                text = {
+                                    com.mateof.passvault.ui.tags.TagChip(
+                                        name = tag.name,
+                                        colour = tag.colour,
+                                    )
+                                },
+                                onClick = {
+                                    tagMenuOpen = false
+                                    // The handler itself toggles: the same id turns it off.
+                                    onTagFilter(tag.id)
+                                },
+                            )
+                        }
+                    }
                 }
             }
         }

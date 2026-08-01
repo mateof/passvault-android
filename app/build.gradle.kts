@@ -20,7 +20,7 @@ android {
         // Raised by CI from the run number. Bumping it by hand is the usual
         // reason an update refuses to install.
         versionCode = (System.getenv("VERSION_CODE") ?: "1").toInt()
-        versionName = "0.16.0"
+        versionName = "0.17.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         resourceConfigurations += listOf("gl", "es", "en")

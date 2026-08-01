@@ -296,4 +296,8 @@
     <string name="sessions_detail_created">Started</string>
     <string name="sessions_detail_last">Last used</string>
     <string name="sessions_detail_expires">Expires</string>
+    <string name="events_filter_tag">Label</string>
+    <string name="events_filter_clear">Clear the filter</string>
+    <string name="tags_search_or_create">Search or create a label</string>
+    <string name="tags_create_named">Create “%1$s”</string>
 </resources>

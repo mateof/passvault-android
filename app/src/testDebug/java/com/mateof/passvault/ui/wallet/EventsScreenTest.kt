@@ -3,6 +3,8 @@ package com.mateof.passvault.ui.wallet
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onLast
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.performClick
@@ -120,7 +122,10 @@ class EventsScreenTest {
     }
 
     @Test
-    fun `a label filters, and pressing it again stops filtering`() {
+    fun `a label filters from the menu, and the cross clears it`() {
+        // The filter moved behind one compact control: a dozen labels as a chip strip took more
+        // of the screen than the events did. The menu holds any number; the chip names the
+        // active filter and carries the cross that clears it.
         show(
             events = listOf(
                 event("1", "Festival do Norte", tagIds = listOf("tag-vigo")),
@@ -129,13 +134,16 @@ class EventsScreenTest {
             tags = listOf(vigo),
         )
 
-        // The first is the filter in the toolbar; the second is the same label drawn on the
-        // card it belongs to. Both are meant to be there.
-        compose.onAllNodesWithText("Vigo")[0].performClick()
+        compose.onNodeWithText(text(com.mateof.passvault.R.string.events_filter_tag)).performClick()
+        compose.waitForIdle()
+        // The menu's entry is drawn after the card's own chip, so it is the last "Vigo" there is.
+        compose.onAllNodesWithText("Vigo").onLast().performClick()
         compose.waitForIdle()
         compose.onAllNodesWithText("Teatro Rosalía").assertCountEquals(0)
 
-        compose.onAllNodesWithText("Vigo")[0].performClick()
+        compose
+            .onNodeWithContentDescription(text(com.mateof.passvault.R.string.events_filter_clear))
+            .performClick()
         compose.waitForIdle()
         compose.onNodeWithText("Teatro Rosalía").assertIsDisplayed()
     }

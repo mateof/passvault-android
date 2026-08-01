@@ -654,7 +654,7 @@ private fun WalletPane(
 }
 
 /** One event, with its tickets. */
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 private fun EventPane(
     eventId: String,
@@ -867,10 +867,31 @@ private fun EventPane(
             )
         },
     ) { padding ->
+        androidx.compose.foundation.layout.Column(modifier = Modifier.padding(padding)) {
+            // The event wears its labels where its owner put them, above the tickets. Tapping
+            // any of them opens the same editor the calendar icon does — a label seen is a
+            // label somebody may want to change.
+            if (tagIds.isNotEmpty()) {
+                androidx.compose.foundation.layout.FlowRow(
+                    horizontalArrangement =
+                        androidx.compose.foundation.layout.Arrangement.spacedBy(6.dp),
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                ) {
+                    for (tagId in tagIds) {
+                        tags.firstOrNull { it.id == tagId }?.let { tag ->
+                            com.mateof.passvault.ui.tags.TagChip(
+                                name = tag.name,
+                                colour = tag.colour,
+                                onClick = { editingDetails = true },
+                            )
+                        }
+                    }
+                }
+            }
         WalletScreen(
             state = WalletUiState(tickets = tickets),
             onTicketClick = onTicketClick,
-            modifier = Modifier.padding(padding),
+            modifier = Modifier,
             // Hidden while choosing: the annex is not a ticket and cannot be handed over as one.
             documents = if (selection == null) documents else emptyList(),
             onOpenDocument = onOpenDocument,
@@ -879,6 +900,7 @@ private fun EventPane(
                 selection = selection?.let { if (id in it) it - id else it + id }
             },
         )
+        }
     }
 }
 

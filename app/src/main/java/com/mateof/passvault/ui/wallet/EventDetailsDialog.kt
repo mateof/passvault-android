@@ -65,6 +65,19 @@ fun EventDetailsDialog(
     var newTagName by remember { mutableStateOf("") }
     var pickingDate by remember { mutableStateOf(false) }
     var pickingTime by remember { mutableStateOf(false) }
+    // The name just sent for creation. When the refreshed vocabulary brings it back, it is
+    // attached without another tap: creating a label from inside an event means wanting it on
+    // that event, or the button would not be here.
+    var pendingCreate by remember { mutableStateOf<String?>(null) }
+
+    androidx.compose.runtime.LaunchedEffect(tags) {
+        pendingCreate?.let { name ->
+            tags.firstOrNull { it.name.trim().equals(name, ignoreCase = true) }?.let { created ->
+                chosen = chosen + created.id
+                pendingCreate = null
+            }
+        }
+    }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -116,46 +129,65 @@ fun EventDetailsDialog(
                     text = stringResource(R.string.tags_of_event),
                     style = MaterialTheme.typography.labelLarge,
                 )
-                if (tags.isNotEmpty()) {
+                // Only what the event carries. The whole vocabulary used to be spread out here,
+                // which at a dozen labels was a wall of chips with the relevant two lost in it.
+                // Tapping a chip takes it off.
+                if (chosen.isNotEmpty()) {
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(spacing.tight)) {
-                        for (tag in tags) {
+                        for (tag in tags.filter { it.id in chosen }) {
                             TagChip(
                                 name = tag.name,
                                 colour = tag.colour,
-                                selected = tag.id in chosen,
+                                onClick = { chosen = chosen - tag.id },
+                            )
+                        }
+                    }
+                }
+
+                // The rest are found by typing: the field filters the vocabulary as it goes,
+                // a suggestion attaches on tap, and only a name that matches nothing offers to
+                // be created — matching is case-blind, because "Vigo" and "vigo" are one word
+                // to the person typing.
+                OutlinedTextField(
+                    value = newTagName,
+                    onValueChange = { newTagName = it },
+                    label = { Text(stringResource(R.string.tags_search_or_create)) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                val query = newTagName.trim()
+                val suggestions = tags.filter { tag ->
+                    tag.id !in chosen &&
+                        (query.isBlank() || tag.name.contains(query, ignoreCase = true))
+                }
+                if (suggestions.isNotEmpty()) {
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(spacing.tight)) {
+                        for (tag in suggestions.take(8)) {
+                            TagChip(
+                                name = tag.name,
+                                colour = tag.colour,
+                                selected = false,
                                 onClick = {
-                                    chosen = if (tag.id in chosen) chosen - tag.id else chosen + tag.id
+                                    chosen = chosen + tag.id
+                                    newTagName = ""
                                 },
                             )
                         }
                     }
                 }
-                // A new label, made without leaving. The colour is picked for them — recolouring
-                // afterwards on the labels screen is one tap, and a dialog inside a dialog is not.
-                androidx.compose.foundation.layout.Row(
-                    horizontalArrangement = Arrangement.spacedBy(spacing.tight),
-                    verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
-                ) {
-                    OutlinedTextField(
-                        value = newTagName,
-                        onValueChange = { newTagName = it },
-                        label = { Text(stringResource(R.string.tags_name)) },
-                        singleLine = true,
-                        modifier = Modifier.weight(1f),
-                    )
-                    TextButton(
-                        onClick = {
-                            onCreateTag(
-                                newTagName.trim(),
-                                // Spread over the palette by count, so five quick labels do not
-                                // come out as five identical violet dots.
-                                listOf("violet", "blue", "teal", "green", "amber", "orange", "red", "pink")[tags.size % 8],
-                            )
-                            newTagName = ""
-                        },
-                        enabled = newTagName.isNotBlank(),
-                    ) {
-                        Text(stringResource(R.string.tags_create_short))
+                val exists = tags.any { it.name.trim().equals(query, ignoreCase = true) }
+                if (query.isNotBlank() && !exists) {
+                    TextButton(onClick = {
+                        onCreateTag(
+                            query,
+                            // Spread over the palette by count, so five quick labels do not
+                            // come out as five identical violet dots.
+                            listOf("violet", "blue", "teal", "green", "amber", "orange", "red", "pink")[tags.size % 8],
+                        )
+                        pendingCreate = query
+                        newTagName = ""
+                    }) {
+                        Text(stringResource(R.string.tags_create_named, query))
                     }
                 }
             }

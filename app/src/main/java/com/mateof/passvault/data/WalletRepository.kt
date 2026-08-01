@@ -81,7 +81,10 @@ class WalletRepository(
                     id = row.id,
                     name = decrypt(row.nameCipher, "events", "name_cipher", row.id) ?: "",
                     venue = decrypt(row.venueCipher, "events", "venue_cipher", row.id),
-                    startsAt = row.startsAt?.take(10),
+                    // The full instant. This used to be cut to ten characters for display,
+                    // which left the edit dialog unable to parse it: it showed empty fields,
+                    // and saving the emptiness erased a date the user had just set.
+                    startsAt = row.startsAt,
                     ticketCount = row.ticketCount,
                     provisionalCount = row.provisionalCount,
                     icon = row.icon,

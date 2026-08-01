@@ -302,4 +302,8 @@
     <string name="sessions_detail_created">Iniciada</string>
     <string name="sessions_detail_last">Último uso</string>
     <string name="sessions_detail_expires">Caduca</string>
+    <string name="events_filter_tag">Etiqueta</string>
+    <string name="events_filter_clear">Quitar o filtro</string>
+    <string name="tags_search_or_create">Buscar ou crear etiqueta</string>
+    <string name="tags_create_named">Crear «%1$s»</string>
 </resources>
