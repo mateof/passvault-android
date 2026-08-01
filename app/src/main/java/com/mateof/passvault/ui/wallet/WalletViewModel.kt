@@ -28,6 +28,7 @@ class WalletViewModel @Inject constructor(
     private val repository: WalletRepository,
     private val rasterizer: com.mateof.passvault.ingest.PageRasterizer,
     private val api: com.mateof.passvault.server.ServerApi,
+    private val engine: com.mateof.passvault.sync.SyncEngine,
 ) : ViewModel() {
 
     private val _pendingProposal =
@@ -103,6 +104,9 @@ class WalletViewModel @Inject constructor(
             pendingSource = null
             _pendingProposal.value = null
             _events.value = ImportOutcome.Saved(saved)
+            // The event this phone just built should reach the server now, not at the next
+            // quarter-hour tick. Nothing happens if no server is configured.
+            com.mateof.passvault.sync.SyncScheduler.syncNow(context)
         }
     }
 
@@ -267,6 +271,24 @@ class WalletViewModel @Inject constructor(
     }
 
     /** Records the icon and colour somebody chose for an event. */
+    private val _refreshing = MutableStateFlow(false)
+    val refreshing: StateFlow<Boolean> = _refreshing.asStateFlow()
+
+    /**
+     * The pull gesture: one synchronisation, felt.
+     *
+     * Distinct from syncNow, which is fire-and-forget for edits — a pull holds the screen and
+     * has to be *seen* finishing, or the gesture reads as broken.
+     */
+    fun refreshFromServer() {
+        viewModelScope.launch {
+            _refreshing.value = true
+            withContext(Dispatchers.IO) { runCatching { engine.sync() } }
+            refreshTags()
+            _refreshing.value = false
+        }
+    }
+
     fun setEventMark(eventId: String, icon: String, colour: String) {
         viewModelScope.launch { repository.setEventMark(eventId, icon, colour) }
     }
@@ -280,6 +302,7 @@ class WalletViewModel @Inject constructor(
                 startsAtTouched = true,
                 venueTouched = true,
             )
+            com.mateof.passvault.sync.SyncScheduler.syncNow(context)
         }
     }
 
@@ -329,6 +352,7 @@ class WalletViewModel @Inject constructor(
                 try {
                     val opened = Tkpak.openWithPassword(archive, password)
                     repository.import(opened)
+                    com.mateof.passvault.sync.SyncScheduler.syncNow(context)
                     ImportOutcome.Imported(
                         ticketCount = opened.bundle.tickets.size,
                         eventName = opened.bundle.event.name,

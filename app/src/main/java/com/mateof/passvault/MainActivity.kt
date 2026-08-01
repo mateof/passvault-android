@@ -193,6 +193,7 @@ private fun PassVaultApp(
     val pendingArchive by viewModel.pendingArchive.collectAsStateWithLifecycle()
     val documentState by viewModel.document.collectAsStateWithLifecycle()
     val eventsState by viewModel.events.collectAsStateWithLifecycle()
+    val walletRefreshing by viewModel.refreshing.collectAsStateWithLifecycle()
     LaunchedEffect(Unit) { viewModel.refreshTags() }
     val eventTickets by viewModel.eventTickets.collectAsStateWithLifecycle()
     val eventDocuments by viewModel.eventDocuments.collectAsStateWithLifecycle()
@@ -422,6 +423,8 @@ private fun PassVaultApp(
                         },
                     )
                 } ?: WalletPane(
+                    refreshing = walletRefreshing,
+                    onRefresh = viewModel::refreshFromServer,
                     state = eventsState,
                     onEventClick = { id, name ->
                         viewModel.openEvent(id)
@@ -601,6 +604,8 @@ private fun UpdatePane(
 @Composable
 private fun WalletPane(
     state: com.mateof.passvault.ui.wallet.EventsUiState,
+    refreshing: Boolean,
+    onRefresh: () -> Unit,
     onEventClick: (String, String) -> Unit,
     onShare: () -> Unit,
     onImport: () -> Unit,
@@ -643,13 +648,20 @@ private fun WalletPane(
             )
         },
     ) { padding ->
-        com.mateof.passvault.ui.wallet.EventsScreen(
-            state = state,
-            onEventClick = { id ->
-                onEventClick(id, state.events.firstOrNull { it.id == id }?.name.orEmpty())
-            },
+        // The gesture a thumb already knows. It runs a real synchronisation, so what it promises
+        // — fresh data — is what it delivers, and the spinner holds until that is true.
+        androidx.compose.material3.pulltorefresh.PullToRefreshBox(
+            isRefreshing = refreshing,
+            onRefresh = onRefresh,
             modifier = Modifier.padding(padding),
-        )
+        ) {
+            com.mateof.passvault.ui.wallet.EventsScreen(
+                state = state,
+                onEventClick = { id ->
+                    onEventClick(id, state.events.firstOrNull { it.id == id }?.name.orEmpty())
+                },
+            )
+        }
     }
 }
 

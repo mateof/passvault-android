@@ -86,5 +86,28 @@ object SyncScheduler {
     /** Stops it, for a wallet that has forgotten its server. */
     fun cancel(context: Context) {
         WorkManager.getInstance(context).cancelUniqueWork(PERIODIC)
+        WorkManager.getInstance(context).cancelUniqueWork(ONCE)
     }
+
+    /**
+     * One synchronisation, now — or as soon as there is a network.
+     *
+     * For the moment something changed: an import, an edited date, a new venue. The periodic
+     * run exists for changes made *elsewhere*; a change made on this phone should not sit here
+     * for up to fifteen minutes waiting for a schedule. Through WorkManager rather than a
+     * coroutine, so it survives the screen being closed and waits out a missing network.
+     *
+     * REPLACE, not append: three edits in a minute mean one upload, not a queue of three.
+     */
+    fun syncNow(context: Context) {
+        val request = androidx.work.OneTimeWorkRequestBuilder<SyncWorker>()
+            .setConstraints(
+                Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build(),
+            )
+            .build()
+        WorkManager.getInstance(context)
+            .enqueueUniqueWork(ONCE, androidx.work.ExistingWorkPolicy.REPLACE, request)
+    }
+
+    private const val ONCE = "passvault.sync.once"
 }

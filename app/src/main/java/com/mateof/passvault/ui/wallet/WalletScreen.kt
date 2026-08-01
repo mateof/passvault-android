@@ -34,6 +34,9 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.ConfirmationNumber
 import com.mateof.passvault.R
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.border
@@ -209,10 +212,33 @@ private fun TicketCard(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(spacing.medium),
         ) {
-            // The tick replaces the state dot while choosing. Two circles side by side, one
-            // meaning "claimed" and the other "picked", is two things nobody can tell apart.
+            // The tick replaces the badge while choosing. Two symbols side by side, one meaning
+            // "claimed" and the other "picked", is two things nobody can tell apart.
             if (chosen == null) {
-                StateDot(ticket.state)
+                // A ticket-shaped badge, tinted by the ticket's state, instead of the bare grey
+                // ring that made every row look like an unfilled radio button. The state still
+                // reads at a glance — the colour is the same one the dot used — but the row now
+                // says what it is.
+                val status = LocalStatusColours.current
+                val tint = when (ticket.state) {
+                    TicketState.Provisional -> status.provisional
+                    TicketState.Held -> status.held
+                    TicketState.Transferred -> status.transferred
+                    TicketState.Free -> MaterialTheme.colorScheme.primary
+                }
+                Box(
+                    modifier = Modifier
+                        .size(44.dp)
+                        .background(tint.copy(alpha = 0.14f), RoundedCornerShape(14.dp)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    androidx.compose.material3.Icon(
+                        imageVector =
+                            Icons.Filled.ConfirmationNumber,
+                        contentDescription = null,
+                        tint = tint,
+                    )
+                }
             } else {
                 Checkbox(checked = chosen, onCheckedChange = { onClick(ticket.id) })
             }
@@ -220,19 +246,24 @@ private fun TicketCard(
                 modifier = Modifier.weight(1f),
                 verticalArrangement = Arrangement.spacedBy(spacing.tight),
             ) {
+                // The ticket's own name first. This screen lives inside an event, so leading
+                // with the event's name printed the same words on every row — four cards all
+                // reading "Barco lugo" with the actual ticket demoted to a footnote.
                 Text(
-                    text = ticket.eventName,
+                    text = ticket.label.ifBlank { ticket.eventName },
                     style = MaterialTheme.typography.titleMedium,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
-                Text(
-                    text = listOfNotNull(ticket.label, ticket.seat).joinToString(" · "),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
+                ticket.seat?.let { seat ->
+                    Text(
+                        text = seat,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
                 if (ticket.state == TicketState.Provisional) {
                     Text(
                         text = stringResource(R.string.claim_provisional),
@@ -248,6 +279,12 @@ private fun TicketCard(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
+            androidx.compose.material3.Icon(
+                imageVector =
+                    Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
 }
