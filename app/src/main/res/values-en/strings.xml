@@ -281,4 +281,13 @@
     <string name="event_password_change">Change the password</string>
     <string name="action_copy">Copy</string>
     <string name="action_more">More options</string>
+    <string name="profile_title">Profile</string>
+    <string name="profile_need_server">Your profile lives on the server. Connect to one to see it.</string>
+    <string name="profile_sign_out">Sign out</string>
+    <string name="settings_title">Settings</string>
+    <string name="settings_language">Language</string>
+    <string name="settings_language_explain">The phone’s language is followed by default. Choose another if the device speaks one language and you read PassVault in a different one.</string>
+    <string name="settings_language_system">System</string>
+    <string name="event_when_pick_date">Pick on the calendar</string>
+    <string name="event_when_pick_time">Pick on the clock</string>
 </resources>

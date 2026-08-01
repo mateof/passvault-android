@@ -53,14 +53,27 @@ class SyncEngine @Inject constructor(
             return@withLock SyncOutcome.NotConfigured
         }
         withContext(Dispatchers.IO) {
+            // The server forgets unwrapped keys on every restart, by design. The passphrase this
+            // phone keeps sealed is what turns that from "sign in again" into nothing at all.
+            settings.vaultPassphrase()?.let { passphrase ->
+                runCatching { api.unlockVault(passphrase) }
+            }
+            Unit
+        }
+        withContext(Dispatchers.IO) {
             runCatching { exchange() }.fold(
                 onSuccess = { SyncOutcome.Done(it) },
                 onFailure = { cause ->
-                    // A session that has ended is a different thing from a server that is down:
-                    // one needs somebody to sign in again, the other needs waiting. The caller
-                    // has to be able to tell them apart, so the type does.
-                    if ((cause as? ServerException)?.status == 401) SyncOutcome.SignedOut
-                    else SyncOutcome.Failed(describe(cause))
+                    // Three different situations that used to collapse into one screen. A dead
+                    // session needs a person; a locked vault needs a passphrase this phone may
+                    // already hold; a server that is down needs waiting.
+                    when {
+                        (cause as? ServerException)?.status == 401 -> SyncOutcome.SignedOut
+                        (cause as? ServerException)?.status == 423 &&
+                            (cause as? ServerException)?.code == "vault.passphraseRequired" ->
+                            SyncOutcome.VaultLocked
+                        else -> SyncOutcome.Failed(describe(cause))
+                    }
                 },
             )
         }
@@ -192,6 +205,9 @@ sealed interface SyncOutcome {
 
     /** The session ended. Somebody has to sign in again; retrying will not help. */
     data object SignedOut : SyncOutcome
+
+    /** The vault needs its passphrase and this phone does not hold it. A person, not a retry. */
+    data object VaultLocked : SyncOutcome
 
     data class Failed(val message: String) : SyncOutcome
 }

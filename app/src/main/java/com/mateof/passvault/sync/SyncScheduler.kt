@@ -52,6 +52,9 @@ class SyncWorker(context: Context, parameters: WorkerParameters) :
             // A session that ended needs a person, not a retry. The sign-in screen says so when
             // they next open the app.
             SyncOutcome.SignedOut -> Result.success()
+            // Same shape: a passphrase this phone does not hold is a person's to type, and a
+            // background retry loop cannot type it.
+            SyncOutcome.VaultLocked -> Result.success()
             // A server that is down, a tunnel asleep, an actual tunnel. Worth trying again with
             // the backoff WorkManager already applies.
             is SyncOutcome.Failed -> Result.retry()

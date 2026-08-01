@@ -100,7 +100,9 @@ class ServerApi(private val settings: ServerSettings) {
                     // a second place the wording lives, and the two would drift.
                     message = parsed?.text("message") ?: parsed?.text("error")
                         ?: "HTTP ${response.code}",
-                    code = parsed?.text("code"),
+                    // The machine-readable key rides in `error`; a caller deciding what a 423
+                    // means needs the key, not the sentence.
+                    code = parsed?.text("code") ?: parsed?.text("error"),
                 )
             }
             return parsed ?: JsonObject(emptyMap())

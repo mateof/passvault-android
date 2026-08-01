@@ -20,6 +20,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.filled.CalendarToday
+import androidx.compose.material.icons.filled.Schedule
 import com.mateof.passvault.R
 import com.mateof.passvault.server.Tag
 import com.mateof.passvault.ui.tags.TagChip
@@ -61,6 +63,8 @@ fun EventDetailsDialog(
     var where by remember { mutableStateOf(venue.orEmpty()) }
     var chosen by remember(chosenTagIds) { mutableStateOf(chosenTagIds.toSet()) }
     var newTagName by remember { mutableStateOf("") }
+    var pickingDate by remember { mutableStateOf(false) }
+    var pickingTime by remember { mutableStateOf(false) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -73,6 +77,14 @@ fun EventDetailsDialog(
                     label = { Text(stringResource(R.string.event_when_date)) },
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    trailingIcon = {
+                        androidx.compose.material3.IconButton(onClick = { pickingDate = true }) {
+                            androidx.compose.material3.Icon(
+                                androidx.compose.material.icons.Icons.Filled.CalendarToday,
+                                contentDescription = stringResource(R.string.event_when_pick_date),
+                            )
+                        }
+                    },
                     modifier = Modifier.fillMaxWidth(),
                 )
                 OutlinedTextField(
@@ -81,6 +93,14 @@ fun EventDetailsDialog(
                     label = { Text(stringResource(R.string.event_when_time)) },
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    trailingIcon = {
+                        androidx.compose.material3.IconButton(onClick = { pickingTime = true }) {
+                            androidx.compose.material3.Icon(
+                                androidx.compose.material.icons.Icons.Filled.Schedule,
+                                contentDescription = stringResource(R.string.event_when_pick_time),
+                            )
+                        }
+                    },
                     modifier = Modifier.fillMaxWidth(),
                 )
                 OutlinedTextField(
@@ -142,6 +162,101 @@ fun EventDetailsDialog(
         },
         confirmButton = {
             TextButton(onClick = { onSave(instantOf(date, time), where.trim(), chosen.toList()) }) {
+                Text(stringResource(R.string.action_save))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) }
+        },
+    )
+
+    if (pickingDate) {
+        DatePickerSheet(
+            initial = date,
+            onDismiss = { pickingDate = false },
+            onPicked = { date = it },
+        )
+    }
+    if (pickingTime) {
+        TimePickerSheet(
+            initial = time,
+            onDismiss = { pickingTime = false },
+            onPicked = { time = it },
+        )
+    }
+}
+
+/**
+ * The platform's own calendar, feeding the same text field the keyboard does.
+ *
+ * The pickers write into the typed fields rather than into their own state: whichever way a
+ * value arrived, there is one source of truth and the save button reads it.
+ */
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@Composable
+private fun DatePickerSheet(
+    initial: String,
+    onDismiss: () -> Unit,
+    onPicked: (String) -> Unit,
+) {
+    val initialMillis = runCatching {
+        java.time.LocalDate.parse(initial)
+            .atStartOfDay(java.time.ZoneOffset.UTC)
+            .toInstant()
+            .toEpochMilli()
+    }.getOrNull()
+    val pickerState = androidx.compose.material3.rememberDatePickerState(
+        initialSelectedDateMillis = initialMillis,
+    )
+
+    androidx.compose.material3.DatePickerDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = {
+            TextButton(onClick = {
+                pickerState.selectedDateMillis?.let { millis ->
+                    onPicked(
+                        java.time.Instant.ofEpochMilli(millis)
+                            .atZone(java.time.ZoneOffset.UTC)
+                            .toLocalDate()
+                            .toString(),
+                    )
+                }
+                onDismiss()
+            }) {
+                Text(stringResource(R.string.action_save))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) }
+        },
+    ) {
+        androidx.compose.material3.DatePicker(state = pickerState)
+    }
+}
+
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@Composable
+private fun TimePickerSheet(
+    initial: String,
+    onDismiss: () -> Unit,
+    onPicked: (String) -> Unit,
+) {
+    val parsed = runCatching { java.time.LocalTime.parse(initial) }.getOrNull()
+    val pickerState = androidx.compose.material3.rememberTimePickerState(
+        initialHour = parsed?.hour ?: 20,
+        initialMinute = parsed?.minute ?: 0,
+        is24Hour = true,
+    )
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.event_when_time)) },
+        text = { androidx.compose.material3.TimePicker(state = pickerState) },
+        confirmButton = {
+            TextButton(onClick = {
+                onPicked("%02d:%02d".format(pickerState.hour, pickerState.minute))
+                onDismiss()
+            }) {
                 Text(stringResource(R.string.action_save))
             }
         },

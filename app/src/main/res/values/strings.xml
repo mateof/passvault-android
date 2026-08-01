@@ -287,4 +287,13 @@
     <string name="event_password_change">Cambiar o contrasinal</string>
     <string name="action_copy">Copiar</string>
     <string name="action_more">Máis opcións</string>
+    <string name="profile_title">Perfil</string>
+    <string name="profile_need_server">O perfil vive no servidor. Conéctate a un para velo.</string>
+    <string name="profile_sign_out">Pechar sesión</string>
+    <string name="settings_title">Axustes</string>
+    <string name="settings_language">Idioma</string>
+    <string name="settings_language_explain">Por defecto síguese o idioma do móbil. Escolle outro se o aparello está noutro idioma pero prefires ler PassVault neste.</string>
+    <string name="settings_language_system">O do sistema</string>
+    <string name="event_when_pick_date">Escoller no calendario</string>
+    <string name="event_when_pick_time">Escoller no reloxo</string>
 </resources>

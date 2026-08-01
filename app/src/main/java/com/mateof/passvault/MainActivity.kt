@@ -86,6 +86,27 @@ import kotlinx.coroutines.launch
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
+
+    /**
+     * Applies the chosen language before any resource is read.
+     *
+     * The device's language is the default and stays so until somebody chooses otherwise — the
+     * setting exists for the phone set to English whose owner reads Galician. Changing it
+     * recreates the activity, which is the platform's own way of reloading every string.
+     */
+    override fun attachBaseContext(newBase: android.content.Context) {
+        val chosen = newBase
+            .getSharedPreferences("passvault.server", android.content.Context.MODE_PRIVATE)
+            .getString("ui_locale", null)
+        if (chosen.isNullOrBlank()) {
+            super.attachBaseContext(newBase)
+            return
+        }
+        val configuration = android.content.res.Configuration(newBase.resources.configuration)
+        configuration.setLocale(java.util.Locale(chosen))
+        super.attachBaseContext(newBase.createConfigurationContext(configuration))
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         // Edge to edge before setContent, so the first frame is already laid out for it rather than
         // reflowing once the insets arrive.
@@ -145,6 +166,8 @@ private sealed interface Screen {
     data object Notices : Screen
     data object Groups : Screen
     data object Tags : Screen
+    data object Profile : Screen
+    data object Settings : Screen
     data object Server : Screen
     data object Updates : Screen
 }
@@ -212,6 +235,8 @@ private fun PassVaultApp(
     BackHandler(
         enabled = screen is Screen.Event ||
             screen is Screen.Tags ||
+            screen is Screen.Profile ||
+            screen is Screen.Settings ||
             screen is Screen.Notices ||
             screen is Screen.Groups ||
             screen is Screen.Server ||
@@ -328,6 +353,8 @@ private fun PassVaultApp(
         Screen.Notices -> Destination.Notices
         Screen.Groups -> Destination.Groups
         Screen.Tags -> Destination.Tags
+        Screen.Profile -> Destination.Profile
+        Screen.Settings -> Destination.Settings
         is Screen.Share -> Destination.Share
         Screen.Server -> Destination.Server
         Screen.Updates -> Destination.Updates
@@ -342,6 +369,8 @@ private fun PassVaultApp(
             Destination.Notices -> Screen.Notices
             Destination.Groups -> Screen.Groups
             Destination.Tags -> Screen.Tags
+            Destination.Profile -> Screen.Profile
+            Destination.Settings -> Screen.Settings
             Destination.Share -> Screen.Share(ShareScope.Everything)
             Destination.Server -> Screen.Server
             Destination.Updates -> Screen.Updates
@@ -469,6 +498,8 @@ private fun PassVaultApp(
                 Screen.Notices -> NoticesPane(onBack = { screen = Screen.Wallet })
                 Screen.Groups -> GroupsPane(onBack = { screen = Screen.Wallet })
                 Screen.Tags -> TagsPane(onBack = { screen = Screen.Wallet })
+                Screen.Profile -> ProfilePane(onBack = { screen = Screen.Wallet })
+                Screen.Settings -> SettingsPane(onBack = { screen = Screen.Wallet })
                 Screen.Server -> ServerPane(onBack = { screen = Screen.Wallet })
                 Screen.Updates -> UpdatePane(onBack = { screen = Screen.Wallet })
                 is Screen.Document -> DocumentPane(
@@ -901,9 +932,7 @@ private fun ServerPane(
             onAddPasskey = { viewModel.addPasskey(passkeys, android.os.Build.MODEL ?: "Android") },
             onEnrolTotp = viewModel::enrolTotp,
             onConfirmTotp = viewModel::confirmTotp,
-            onHandleChanged = viewModel::checkHandle,
-            onSaveHandle = viewModel::saveHandle,
-            onRevokeSession = viewModel::revokeSession,
+            onSignOut = viewModel::signOut,
             onOpenUri = { uri ->
                 // Whatever registered for `otpauth:` — Google Authenticator, Microsoft
                 // Authenticator, Aegis, a password manager. If nothing did, the key is on
@@ -938,6 +967,85 @@ private fun DocumentPane(
         },
     ) { padding ->
         com.mateof.passvault.ui.document.DocumentScreen(state, Modifier.padding(padding))
+    }
+}
+
+/**
+ * Who you are on the server: your name, your open sessions, and the way out.
+ *
+ * Split off the server screen, which had grown into connection, synchronisation, second factors,
+ * a username and a session list in one column. The server screen keeps the connection; this
+ * keeps the identity. Both read the same view model because they describe the same account.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ProfilePane(
+    onBack: () -> Unit,
+    viewModel: com.mateof.passvault.ui.server.ServerViewModel = hiltViewModel(),
+) {
+    val state by viewModel.state.collectAsStateWithLifecycle()
+
+    LaunchedEffect(Unit) { viewModel.loadSessions() }
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text(stringResource(R.string.profile_title)) },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
+                    }
+                },
+            )
+        },
+    ) { padding ->
+        com.mateof.passvault.ui.server.ProfileScreen(
+            state = state,
+            onHandleChanged = viewModel::checkHandle,
+            onSaveHandle = viewModel::saveHandle,
+            onRevokeSession = viewModel::revokeSession,
+            onSignOut = viewModel::signOut,
+            modifier = Modifier.padding(padding),
+        )
+    }
+}
+
+/**
+ * How the app behaves: for now, which language it speaks.
+ *
+ * Its own screen rather than a corner of another, because settings accumulate — and the first
+ * one, language, exists for the phone set to English whose owner reads Galician.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SettingsPane(
+    onBack: () -> Unit,
+    viewModel: com.mateof.passvault.ui.server.ServerViewModel = hiltViewModel(),
+) {
+    val activity = LocalContext.current as? android.app.Activity
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text(stringResource(R.string.settings_title)) },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
+                    }
+                },
+            )
+        },
+    ) { padding ->
+        com.mateof.passvault.ui.server.SettingsScreen(
+            currentLocale = viewModel.uiLocale(),
+            onLocaleChosen = { tag ->
+                viewModel.setUiLocale(tag)
+                // The platform's own way of reloading every string. Anything subtler leaves
+                // half the screens in the old language until they happen to recompose.
+                activity?.recreate()
+            },
+            modifier = Modifier.padding(padding),
+        )
     }
 }
 

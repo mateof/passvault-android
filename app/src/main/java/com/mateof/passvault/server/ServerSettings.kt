@@ -43,7 +43,7 @@ class ServerSettings(
     }
 
     fun clear() {
-        preferences.edit().remove(BASE_URL).remove(SESSION_TOKEN).apply()
+        preferences.edit().remove(BASE_URL).remove(SESSION_TOKEN).remove(VAULT_PASSPHRASE).apply()
     }
 
     /**
@@ -61,6 +61,41 @@ class ServerSettings(
     fun sessionToken(): String? {
         val sealed = preferences.getString(SESSION_TOKEN, null) ?: return null
         return keys?.open(sealed)
+    }
+
+    /**
+     * The vault passphrase, sealed under the KeyStore key like the session token.
+     *
+     * The server forgets unwrapped keys on every restart — that is its design — so without this,
+     * every server update asked the phone to retype the passphrase. Storing it here adds no new
+     * exposure class: this device already holds the entire wallet readable under the same
+     * KeyStore key, so a passphrase sealed the same way protects exactly as much as the wallet
+     * it opens. It is dropped on sign-out with everything else.
+     */
+    fun vaultPassphrase(): String? {
+        val sealed = preferences.getString(VAULT_PASSPHRASE, null) ?: return null
+        return keys?.open(sealed)
+    }
+
+    fun setVaultPassphrase(passphrase: String?) {
+        preferences.edit().apply {
+            if (passphrase == null || keys == null) remove(VAULT_PASSPHRASE)
+            else putString(VAULT_PASSPHRASE, keys.seal(passphrase))
+        }.apply()
+    }
+
+    /**
+     * The interface language, when somebody chose one other than the device's.
+     *
+     * Null means "follow the system", which is the default and the right one for almost
+     * everybody — the setting exists for the phone set to English whose owner reads Galician.
+     */
+    fun uiLocale(): String? = preferences.getString(UI_LOCALE, null)?.takeIf { it.isNotBlank() }
+
+    fun setUiLocale(tag: String?) {
+        preferences.edit().apply {
+            if (tag.isNullOrBlank()) remove(UI_LOCALE) else putString(UI_LOCALE, tag)
+        }.apply()
     }
 
     fun setSessionToken(token: String?) {
@@ -93,8 +128,8 @@ class ServerSettings(
         }.apply()
     }
 
-    /** What the server should answer in. Its catalogue has the same three languages. */
-    fun locale(): String = when (Locale.getDefault().language) {
+    /** What the server should answer in: the chosen language first, the device's otherwise. */
+    fun locale(): String = when (uiLocale() ?: Locale.getDefault().language) {
         "es" -> "es"
         "en" -> "en"
         else -> "gl"
@@ -103,6 +138,8 @@ class ServerSettings(
     private companion object {
         const val BASE_URL = "base_url"
         const val SESSION_TOKEN = "session_token"
+        const val VAULT_PASSPHRASE = "vault_passphrase"
+        const val UI_LOCALE = "ui_locale"
         const val EVENT_PASSWORD = "event_password:"
     }
 }

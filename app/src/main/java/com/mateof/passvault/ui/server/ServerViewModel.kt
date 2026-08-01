@@ -152,11 +152,36 @@ class ServerViewModel @Inject constructor(
             val outcome = withContext(Dispatchers.IO) { runCatching { api.unlockVault(passphrase) } }
             _state.value = outcome.fold(
                 onSuccess = {
+                    // Kept sealed under the KeyStore, like the token: the server forgets its
+                    // unwrapped keys on every restart by design, and without this every update
+                    // of the server asked this phone to retype the passphrase.
+                    settings.setVaultPassphrase(passphrase)
                     loadGroups()
                     _state.value.copy(busy = false, stage = ServerStage.Ready)
                 },
                 onFailure = { _state.value.copy(busy = false, failure = describe(it)) },
             )
+        }
+    }
+
+    fun uiLocale(): String? = settings.uiLocale()
+
+    fun setUiLocale(tag: String?) = settings.setUiLocale(tag)
+
+    /**
+     * Signs out of the server and stays pointed at it.
+     *
+     * Different from `forget`, which erases the address too. Signing out is "not me, not now":
+     * the session ends here and on the server, the sealed secrets go, and the address stays so
+     * the next sign-in is an email and a password rather than reconfiguration.
+     */
+    fun signOut() {
+        viewModelScope.launch {
+            withContext(Dispatchers.IO) { runCatching { api.signOut() } }
+            settings.setVaultPassphrase(null)
+            com.mateof.passvault.sync.SyncScheduler.cancel(context)
+            challenge = null
+            _state.value = ServerUiState(address = settings.baseUrl(), stage = ServerStage.SignIn)
         }
     }
 
@@ -178,6 +203,11 @@ class ServerViewModel @Inject constructor(
                     // expired. Back to the sign-in step rather than a failure message about a
                     // synchronisation, which is not the thing that needs attention.
                     _state.value.copy(busy = false, stage = ServerStage.SignIn)
+                SyncOutcome.VaultLocked ->
+                    // The session is fine; the server merely lacks the passphrase after a
+                    // restart and this phone does not hold it either. Ask for exactly that,
+                    // not for a whole sign-in.
+                    _state.value.copy(busy = false, stage = ServerStage.Vault)
                 is SyncOutcome.Failed -> _state.value.copy(busy = false, failure = outcome.message)
             }
         }
