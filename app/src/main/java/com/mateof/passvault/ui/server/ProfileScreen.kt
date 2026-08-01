@@ -317,9 +317,14 @@ private fun instant(value: String?): String? {
 fun SettingsScreen(
     currentLocale: String?,
     onLocaleChosen: (String?) -> Unit,
+    deviceName: String,
+    onDeviceNameSaved: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val spacing = LocalSpacing.current
+    var typedName by androidx.compose.runtime.remember {
+        androidx.compose.runtime.mutableStateOf(deviceName)
+    }
 
     Column(
         modifier = modifier
@@ -328,6 +333,36 @@ fun SettingsScreen(
             .padding(spacing.medium),
         verticalArrangement = Arrangement.spacedBy(spacing.small),
     ) {
+        // The name other people see — in the transfer list on another phone, in the session
+        // list on the server. The hardware model is the default, and "Pixel 8" names nobody
+        // in a family that bought two of them.
+        Text(
+            text = stringResource(R.string.settings_device_name),
+            style = MaterialTheme.typography.titleMedium,
+        )
+        Text(
+            text = stringResource(R.string.settings_device_name_explain),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        OutlinedTextField(
+            value = typedName,
+            onValueChange = { typedName = it },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth(),
+        )
+        OutlinedButton(
+            onClick = { onDeviceNameSaved(typedName) },
+            enabled = typedName.isNotBlank() && typedName.trim() != deviceName,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text(stringResource(R.string.action_save))
+        }
+
+        androidx.compose.material3.HorizontalDivider(
+            modifier = Modifier.padding(vertical = spacing.small),
+        )
+
         Text(stringResource(R.string.settings_language), style = MaterialTheme.typography.titleMedium)
         Text(
             text = stringResource(R.string.settings_language_explain),

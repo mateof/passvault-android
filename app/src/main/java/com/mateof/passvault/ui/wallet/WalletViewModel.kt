@@ -322,6 +322,83 @@ class WalletViewModel @Inject constructor(
     private val _events = MutableStateFlow<ImportOutcome?>(null)
     val importOutcome: StateFlow<ImportOutcome?> = _events.asStateFlow()
 
+    /** A sentence about the last deletion, for the snackbar. Deletions deserve a receipt. */
+    private val _notice = MutableStateFlow<String?>(null)
+    val notice: StateFlow<String?> = _notice.asStateFlow()
+
+    fun consumeNotice() {
+        _notice.value = null
+    }
+
+    /**
+     * Deletes events: on the server first when one is connected, then on this phone.
+     *
+     * The order is the policy the user was promised — the server's copy is the one that
+     * counts. When the server cannot be reached, only this phone forgets, and the notice says
+     * so in as many words: what a server keeps comes back at the next synchronisation.
+     */
+    fun deleteEvents(eventIds: List<String>) {
+        viewModelScope.launch {
+            val configured = engine.isPossible
+            var keptByServer = 0
+            withContext(Dispatchers.IO) {
+                for (eventId in eventIds) {
+                    if (configured) {
+                        // 404 is as good as deleted: an event the server never had, or already
+                        // let go of, is exactly the outcome asked for.
+                        val outcome = runCatching { api.deleteEvent(eventId) }
+                        val status = (outcome.exceptionOrNull() as? com.mateof.passvault.server.ServerException)?.status
+                        if (outcome.isFailure && status != 404) keptByServer += 1
+                    }
+                    repository.purgeEventLocally(eventId)
+                }
+            }
+            _notice.value = context.getString(
+                when {
+                    !configured -> com.mateof.passvault.R.string.notice_deleted_device
+                    keptByServer == 0 -> com.mateof.passvault.R.string.notice_deleted_everywhere
+                    else -> com.mateof.passvault.R.string.notice_deleted_device_only_server_keeps
+                },
+            )
+        }
+    }
+
+    /**
+     * Deletes tickets, by whichever mechanism this phone is entitled to.
+     *
+     * An event created on this device gets tombstones in the log — the removal travels to the
+     * server and to every other phone by the same road every other edit takes. An event created
+     * elsewhere gets the server asked (it holds the authority) and this phone forgets its copy;
+     * without a reachable server that forgetting is local, and the notice says what that means.
+     */
+    fun deleteTickets(eventId: String, ticketIds: Set<String>) {
+        if (ticketIds.isEmpty()) return
+        viewModelScope.launch {
+            val propagates = withContext(Dispatchers.IO) {
+                if (repository.isCreatedHere(eventId)) {
+                    repository.removeTicketsByOperation(eventId, ticketIds)
+                    true
+                } else {
+                    var reached = api.isSignedIn
+                    if (reached) {
+                        for (ticketId in ticketIds) {
+                            val outcome = runCatching { api.withdrawTicket(ticketId) }
+                            val status = (outcome.exceptionOrNull() as? com.mateof.passvault.server.ServerException)?.status
+                            if (outcome.isFailure && status != 404) reached = false
+                        }
+                    }
+                    repository.purgeTicketsLocally(eventId, ticketIds)
+                    reached
+                }
+            }
+            _notice.value = context.getString(
+                if (propagates) com.mateof.passvault.R.string.notice_tickets_deleted
+                else com.mateof.passvault.R.string.notice_tickets_deleted_device,
+            )
+            com.mateof.passvault.sync.SyncScheduler.syncNow(context)
+        }
+    }
+
     /**
      * Imports a file somebody shared.
      *

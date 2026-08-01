@@ -1,6 +1,5 @@
 package com.mateof.passvault.sync
 
-import android.os.Build
 import com.mateof.passvault.crypto.Base64Url
 import com.mateof.passvault.data.DeviceKeys
 import com.mateof.passvault.data.WalletRepository
@@ -38,12 +37,8 @@ class SyncEngine @Inject constructor(
 ) {
     private val running = Mutex()
 
-    /** What this device is called on the server's list. The model, because "Android" names nothing. */
-    private val deviceName: String = listOf(Build.MANUFACTURER, Build.MODEL)
-        .filter { it.isNotBlank() }
-        .joinToString(" ")
-        .ifBlank { "Android" }
-        .take(120)
+    /** What this device is called on the server's list: the name its owner gave it. */
+    private val deviceName: String get() = settings.deviceName()
 
     val isPossible: Boolean get() = settings.isConfigured() && api.isSignedIn
 

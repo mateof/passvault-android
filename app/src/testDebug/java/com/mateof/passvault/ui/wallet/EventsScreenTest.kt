@@ -84,12 +84,25 @@ class EventsScreenTest {
     }
 
     @Test
-    fun `last night is not past yet`() {
-        // The grace period, stated as a case: somebody on the way home from a concert should
-        // still find it where they left it.
+    fun `last night is past by the morning after`() {
+        // A timed event is over once its time is. The earlier day of grace read as a bug:
+        // the concert had plainly happened and the wallet kept insisting it had not.
         val lastNight = event("1", "Concerto", startsAt = "2026-07-31T21:00:00Z")
 
-        assertThat(lastNight.isPast(now.toEpochMilli())).isFalse()
+        assertThat(lastNight.isPast(now.toEpochMilli())).isTrue()
+    }
+
+    @Test
+    fun `a date-only event lasts its whole day`() {
+        // Stored as midnight because only the day is known: "the 14th" is not over at a
+        // minute past midnight on the 14th, it is over when the 14th is.
+        val localMidnight = java.time.LocalDate.of(2026, 8, 1)
+            .atStartOfDay(java.time.ZoneId.systemDefault())
+            .toInstant()
+            .toString()
+        val today = event("1", "Feira", startsAt = localMidnight)
+
+        assertThat(today.isPast(now.toEpochMilli())).isFalse()
     }
 
     @Test

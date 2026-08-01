@@ -9,6 +9,9 @@
     <uses-permission
         android:name="android.permission.NEARBY_WIFI_DEVICES"
         android:usesPermissionFlags="neverForLocation" />
+    <!-- mDNS answers arrive as multicast, and most phones drop multicast unless an app holds
+         the lock. Without this, discovery "works" and finds nothing, forever. -->
+    <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
     <uses-permission
         android:name="android.permission.ACCESS_FINE_LOCATION"
         android:maxSdkVersion="32" />
@@ -41,9 +44,13 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.PassVault">
 
+        <!-- configChanges: turning the phone must not tear the activity down, because the
+             screen you are on is state this app keeps in composition — recreation sent every
+             rotation back to the wallet. Compose reads the new configuration and relays out. -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden"
             android:theme="@style/Theme.PassVault">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />

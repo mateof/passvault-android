@@ -157,6 +157,10 @@ class ServerViewModel @Inject constructor(
                     // of the server asked this phone to retype the passphrase.
                     settings.setVaultPassphrase(passphrase)
                     loadGroups()
+                    // Who this account is — including whether it runs the installation. Without
+                    // this the admin door only appeared after leaving the screen and returning,
+                    // because arrival had asked while nobody was signed in yet.
+                    loadSessions()
                     _state.value.copy(busy = false, stage = ServerStage.Ready)
                 },
                 onFailure = { _state.value.copy(busy = false, failure = describe(it)) },
@@ -165,6 +169,10 @@ class ServerViewModel @Inject constructor(
     }
 
     fun adminUrl(): String = api.adminUrl()
+
+    fun deviceName(): String = settings.deviceName()
+
+    fun setDeviceName(name: String) = settings.setDeviceName(name)
 
     fun uiLocale(): String? = settings.uiLocale()
 

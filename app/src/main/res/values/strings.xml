@@ -323,4 +323,42 @@
     <string name="delete_account_warning">Bórrase a conta no servidor: o baúl, os teus eventos e os seus ficheiros, tamén das carteiras de quen os recibiu. Non se pode desfacer. A carteira local deste móbil consérvase.</string>
     <string name="delete_account_field">Contrasinal (ou correo, se entras con Google/chave)</string>
     <string name="delete_account_confirm">Eliminar definitivamente</string>
+    <string name="action_delete">Eliminar</string>
+    <string name="share_send_card">Enviar entradas</string>
+    <string name="share_send_card_hint">Escolle que compartir e mándallo ao móbil que recibe.</string>
+    <string name="share_receive_card">Recibir entradas</string>
+    <string name="share_receive_card_hint">Este móbil ponse á espera do que lle manden.</string>
+    <string name="share_send_explain">No outro móbil abre Compartir → Recibir. Despois escólleo da lista, escribe o seu enderezo ou achega os dous móbiles.</string>
+    <string name="share_receive_explain">Dille á outra persoa que busque este nome na súa lista, ou que escriba o enderezo.</string>
+    <string name="share_receive_own_name_hint">Así aparece este móbil na lista do outro. Pódese cambiar en Axustes.</string>
+    <string name="share_receive_waiting">Agardando polo outro móbil…</string>
+    <string name="share_manual_send_hint">Escribe o enderezo que aparece na pantalla do móbil que recibe.</string>
+    <plurals name="share_sent_done">
+        <item quantity="one">Enviouse %1$d cambio</item>
+        <item quantity="other">Enviáronse %1$d cambios</item>
+    </plurals>
+    <string name="share_sent_detail">Xa está no móbil «%1$s».</string>
+    <string name="event_delete_action">Eliminar o evento</string>
+    <string name="event_delete_confirm_text">Bórrase «%1$s» coas súas entradas e ficheiros. Se hai servidor conectado, tamén alí — e para todos con quen se compartiu. Non se pode desfacer.</string>
+    <plurals name="events_delete_confirm">
+        <item quantity="one">Eliminar %1$d evento?</item>
+        <item quantity="other">Eliminar %1$d eventos?</item>
+    </plurals>
+    <string name="events_delete_confirm_text">Bórranse coas súas entradas e ficheiros. Se hai servidor conectado, tamén alí. Non se pode desfacer.</string>
+    <plurals name="events_selected">
+        <item quantity="one">%1$d evento</item>
+        <item quantity="other">%1$d eventos</item>
+    </plurals>
+    <plurals name="tickets_delete_confirm">
+        <item quantity="one">Eliminar %1$d entrada?</item>
+        <item quantity="other">Eliminar %1$d entradas?</item>
+    </plurals>
+    <string name="tickets_delete_confirm_text">Desáparecen do evento, tamén para quen o teña compartido. Non se pode desfacer.</string>
+    <string name="notice_deleted_everywhere">Eliminado, tamén do servidor.</string>
+    <string name="notice_deleted_device_only_server_keeps">Eliminado neste móbil. O servidor consérvao: volverá ao sincronizar.</string>
+    <string name="notice_deleted_device">Eliminado deste móbil.</string>
+    <string name="notice_tickets_deleted">Entradas eliminadas.</string>
+    <string name="notice_tickets_deleted_device">Entradas eliminadas neste móbil. Se un servidor as garda, volverán ao sincronizar.</string>
+    <string name="settings_device_name">Nome deste dispositivo</string>
+    <string name="settings_device_name_explain">É o nome que ven os demáis: na lista ao compartir e nas sesións do servidor.</string>
 </resources>

@@ -121,40 +121,45 @@ object Transfer {
     }
 
     /**
-     * Says the check passed, and makes sure the other side says so too.
+     * The sender's half of the confirmation: say the check passed, hear the same back.
      *
      * Sent *through* the encrypted session rather than in the open, which is what turns it from a
      * ritual into a check: a device sitting in the middle holds a working session with each side
      * but two different keys, so its relayed confirmation fails to authenticate and the receiving
      * side learns it is being attacked — even if a careless user waved six digits through.
      *
-     * The check itself is one of two things. Without NFC it is the digits, compared by two people.
-     * With it, the tapping side returns the token it read off the other phone's tag, which proves
-     * physical contact — something no attacker on the network can fake.
-     *
-     * A frame that fails to authenticate here is the interposed device, not a network glitch, and
-     * is reported as [TransferError.DIGITS_MISMATCH] rather than as a generic failure: the user
-     * needs to be told they were attacked, not that something went wrong.
+     * The token rides along when this sender read one off the receiver's tag; a sender who came
+     * by list or by typed address has none, and the receiver falls back to the digits.
      */
-    fun confirm(
-        peer: PairedPeer,
-        isInitiator: Boolean,
-        /** Returned to prove this phone is the one that touched the other. Tapping side only. */
-        token: ByteArray? = null,
-        /** Demanded of the peer before anything moves. Advertising side only. */
-        expected: ByteArray? = null,
-    ) {
-        // Strictly ordered, and that is the security property rather than a style choice. The side
-        // holding the token must not reveal it until the other has proved it already knows it —
-        // otherwise a device that dialled in without ever touching this phone would be handed the
-        // very secret that was supposed to distinguish it, and could hand it straight back.
-        if (isInitiator) {
-            send(peer, token)
-            expectConfirmation(peer, expected = null)
-        } else {
-            expectConfirmation(peer, expected)
-            send(peer, null)
+    fun confirmAsSender(peer: PairedPeer, token: ByteArray? = null) {
+        send(peer, token)
+        expectConfirmation(peer)
+    }
+
+    /**
+     * The receiver's first half: hear the sender's confirmation and learn how it authenticated.
+     *
+     * Returns the tap token the sender presented, or null for a sender relying on the digits.
+     * The caller decides what each means — it published the tag, so it knows what to expect —
+     * and calls [acknowledge] once its own check has passed. A frame that fails to authenticate
+     * is the interposed device, reported as [TransferError.DIGITS_MISMATCH]: the user needs to
+     * be told they were attacked, not that something went wrong.
+     */
+    fun awaitConfirmation(peer: PairedPeer): ByteArray? {
+        val reply = receiveConfirm(peer)
+        return reply.string("token")?.let {
+            runCatching { Base64Url.decodeExact(it, 32) }.getOrElse {
+                throw TransferException(
+                    TransferError.DIGITS_MISMATCH,
+                    "the sender presented a malformed tap token",
+                )
+            }
         }
+    }
+
+    /** The receiver's second half: its own check passed, and it says so. */
+    fun acknowledge(peer: PairedPeer) {
+        send(peer, null)
     }
 
     private fun send(peer: PairedPeer, token: ByteArray?) {
@@ -165,7 +170,11 @@ object Transfer {
         peer.session.send(message.toString().toByteArray(Charsets.UTF_8))
     }
 
-    private fun expectConfirmation(peer: PairedPeer, expected: ByteArray?) {
+    private fun expectConfirmation(peer: PairedPeer) {
+        receiveConfirm(peer)
+    }
+
+    private fun receiveConfirm(peer: PairedPeer): JsonObject {
         val reply = try {
             parse(peer.session.receive())
         } catch (cause: TransferException) {
@@ -181,22 +190,7 @@ object Transfer {
         if (reply.string("kind") != CONFIRM) {
             throw TransferException(TransferError.PROTOCOL, "expected a confirmation")
         }
-        if (expected == null) {
-            return
-        }
-        val returned = runCatching { Base64Url.decodeExact(reply.string("token")!!, 32) }
-            .getOrElse {
-                throw TransferException(
-                    TransferError.DIGITS_MISMATCH,
-                    "the peer returned no tap token, so it never touched this phone",
-                )
-            }
-        if (!returned.contentEquals(expected)) {
-            throw TransferException(
-                TransferError.DIGITS_MISMATCH,
-                "the peer returned a different tap token",
-            )
-        }
+        return reply
     }
 
     /**

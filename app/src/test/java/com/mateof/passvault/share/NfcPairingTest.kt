@@ -68,7 +68,7 @@ class NfcPairingTest {
                 ana.deviceId, ana.signingPublicKey, "Ana", isInitiator = true,
                 expectedPeerKey = readKey,
             )
-            Transfer.confirm(peer, isInitiator = true, token = returnedToken)
+            Transfer.confirmAsSender(peer, token = returnedToken)
         }
         val advertiser = async {
             val peer = Transfer.greet(
@@ -76,7 +76,8 @@ class NfcPairingTest {
                 brais.deviceId, brais.signingPublicKey, "Brais", isInitiator = false,
                 ephemeralKeys = advertised,
             )
-            Transfer.confirm(peer, isInitiator = false, expected = token)
+            expectTapToken(peer, token)
+            Transfer.acknowledge(peer)
         }
         return tapper to advertiser
     }
@@ -119,20 +120,21 @@ class NfcPairingTest {
     }
 
     @Test
-    fun `the advertiser demands the token before revealing anything`() {
-        // The ordering is the security property: were the advertiser to confirm first, a peer that
-        // never tapped would be handed the very secret meant to distinguish it.
+    fun `a sender without a token falls to the digits, and the token is never revealed`() {
+        // The ordering is the security property: the receiver hears the sender's confirmation
+        // first, and its own acknowledgement carries no token. A sender that never tapped is
+        // not refused outright — it is held for the human comparison, which is the check that
+        // applies to it — but nothing it receives helps it pretend it tapped.
         val advertised = LocalPairing.generateKeys()
-        val token = Primitives.randomBytes(32)
         val wire = Wire()
 
-        val impostor = async {
+        val listPicker = async {
             val peer = Transfer.greet(
                 wire.initiatorIn, wire.initiatorOut,
                 ana.deviceId, ana.signingPublicKey, "Ana", isInitiator = true,
             )
             // Confirms without a token, the best a device that never touched anything can do.
-            Transfer.confirm(peer, isInitiator = true)
+            Transfer.confirmAsSender(peer)
         }
         val advertiser = async {
             val peer = Transfer.greet(
@@ -140,12 +142,14 @@ class NfcPairingTest {
                 brais.deviceId, brais.signingPublicKey, "Brais", isInitiator = false,
                 ephemeralKeys = advertised,
             )
-            Transfer.confirm(peer, isInitiator = false, expected = token)
+            val presented = Transfer.awaitConfirmation(peer)
+            Transfer.acknowledge(peer)
+            presented
         }
 
-        val failure = runCatching { advertiser.get(10, TimeUnit.SECONDS) }.exceptionOrNull()
-        assertThat(causeOf(failure)?.code).isEqualTo(TransferError.DIGITS_MISMATCH)
-        impostor.cancel(true)
+        // Null is the fall-to-digits signal; anything else would let a dialler skip the humans.
+        assertThat(advertiser.get(10, TimeUnit.SECONDS)).isNull()
+        listPicker.get(10, TimeUnit.SECONDS)
     }
 
     @Test
@@ -174,6 +178,17 @@ class NfcPairingTest {
         val failure = runCatching { NfcHandover.decode(garbage) }.exceptionOrNull()
 
         assertThat((failure as? TransferException)?.code).isEqualTo(TransferError.PROTOCOL)
+    }
+
+    /** What the receiving screen does with the sender's confirmation, distilled. */
+    private fun expectTapToken(peer: PairedPeer, expected: ByteArray) {
+        val presented = Transfer.awaitConfirmation(peer)
+        if (presented == null || !presented.contentEquals(expected)) {
+            throw TransferException(
+                TransferError.DIGITS_MISMATCH,
+                "the sender presented a tap token this phone did not publish",
+            )
+        }
     }
 
     private fun causeOf(failure: Throwable?): TransferException? =

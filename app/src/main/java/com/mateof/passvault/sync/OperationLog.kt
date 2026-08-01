@@ -320,6 +320,39 @@ class OperationLog(
 
     suspend fun quarantined(eventId: String): List<Operation> =
         dao.quarantinedFor(eventId).map { it.toOperation() }
+
+    /**
+     * Forgets an event entirely — the one exception to append-only.
+     *
+     * For an event this device did not create there is no operation it is entitled to sign
+     * about it, so "I no longer want this" can only be said locally, by forgetting. If a server
+     * still holds the event, the next synchronisation brings it back: the server is the one
+     * whose word carries, and this method does not pretend otherwise.
+     */
+    suspend fun purgeEvent(eventId: String) {
+        dao.deleteForEvent(eventId)
+    }
+
+    /**
+     * Forgets the operations that speak about particular tickets.
+     *
+     * The local way out for tickets in somebody else's event, where a `ticket.remove` this
+     * device signed would rightly be refused by every replayer. Same caveat as [purgeEvent]:
+     * a server that still holds them sends them again.
+     */
+    suspend fun purgeTickets(eventId: String, ticketIds: Set<String>) {
+        val doomed = dao.appliedFor(eventId)
+            .map { it.toOperation() }
+            .filter { operation ->
+                val named = (operation.body["ticketId"] as? JsonPrimitive)
+                    ?.let { if (it.isString) it.content else null }
+                named != null && named in ticketIds
+            }
+            .map { it.operationId }
+        if (doomed.isNotEmpty()) {
+            dao.deleteOperations(doomed)
+        }
+    }
 }
 
 enum class AcceptState { APPLIED, DUPLICATE, QUARANTINED, REJECTED }

@@ -29,6 +29,9 @@ class PeerDiscovery(context: Context) {
 
     private val nsd = context.getSystemService(Context.NSD_SERVICE) as NsdManager
 
+    private val wifi =
+        context.applicationContext.getSystemService(Context.WIFI_SERVICE) as android.net.wifi.WifiManager
+
     private var registration: NsdManager.RegistrationListener? = null
 
     private val _advertisedName = MutableStateFlow<String?>(null)
@@ -123,13 +126,24 @@ class PeerDiscovery(context: Context) {
             override fun onStopDiscoveryFailed(serviceType: String, errorCode: Int) = Unit
         }
 
+        // The answers to an mDNS query arrive as multicast, and Android drops multicast
+        // unless somebody holds the lock. This is why the peer list stayed empty on most real
+        // phones while working on every emulator: the emulator's network stack does not filter.
+        val multicast = wifi.createMulticastLock("passvault-discovery").apply {
+            setReferenceCounted(false)
+            acquire()
+        }
+
         nsd.discoverServices(
             "${TransferProtocol.SERVICE_TYPE}.",
             NsdManager.PROTOCOL_DNS_SD,
             listener,
         )
         trySend(emptyList())
-        awaitClose { runCatching { nsd.stopServiceDiscovery(listener) } }
+        awaitClose {
+            runCatching { nsd.stopServiceDiscovery(listener) }
+            runCatching { multicast.release() }
+        }
     }
 }
 

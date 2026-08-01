@@ -85,8 +85,12 @@ class TransferTest {
         val wire = Wire()
         val (initiator, responder) = greetBothSides(wire)
 
-        val left = async { Transfer.confirm(initiator, isInitiator = true) }
-        val right = async { Transfer.confirm(responder, isInitiator = false) }
+        val left = async { Transfer.confirmAsSender(initiator) }
+        val right = async {
+            val presented = Transfer.awaitConfirmation(responder)
+            assertThat(presented).isNull()
+            Transfer.acknowledge(responder)
+        }
         left.get(10, TimeUnit.SECONDS)
         right.get(10, TimeUnit.SECONDS)
 
@@ -97,8 +101,11 @@ class TransferTest {
     fun `what one side sends the other reads back`() {
         val wire = Wire()
         val (initiator, responder) = greetBothSides(wire)
-        async { Transfer.confirm(initiator, isInitiator = true) }
-        async { Transfer.confirm(responder, isInitiator = false) }.get(10, TimeUnit.SECONDS)
+        async { Transfer.confirmAsSender(initiator) }
+        async {
+            Transfer.awaitConfirmation(responder)
+            Transfer.acknowledge(responder)
+        }.get(10, TimeUnit.SECONDS)
 
         val sent = async { initiator.session.send("entradas".toByteArray()) }
         val received = async { responder.session.receive() }
@@ -152,8 +159,11 @@ class TransferTest {
     fun `an altered frame does not authenticate`() {
         val wire = Wire()
         val (initiator, responder) = greetBothSides(wire)
-        async { Transfer.confirm(initiator, isInitiator = true) }
-        async { Transfer.confirm(responder, isInitiator = false) }.get(10, TimeUnit.SECONDS)
+        async { Transfer.confirmAsSender(initiator) }
+        async {
+            Transfer.awaitConfirmation(responder)
+            Transfer.acknowledge(responder)
+        }.get(10, TimeUnit.SECONDS)
         // A session built on a different key is what a relayed frame looks like from the inside.
         val impostor = TransferSession(wire.responderIn, wire.responderOut, Primitives.randomKey(), false)
 

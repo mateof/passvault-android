@@ -542,6 +542,59 @@ class WalletRepository(
         )
     }
 
+    /** Whether this very device created the event, which is what entitles it to sign removals. */
+    suspend fun isCreatedHere(eventId: String): Boolean =
+        log.replay(eventId).events.firstOrNull()?.creatorDeviceId == keys.identity().deviceId
+
+    /**
+     * Removes tickets from an event this device created: a tombstone each, then reprojection.
+     *
+     * Through the log, like every other fact about an event, so the removal travels — to the
+     * server at the next synchronisation and from there to every other phone. Reviving a
+     * removed ticket is a new ticket; the tombstone is permanent by design.
+     */
+    suspend fun removeTicketsByOperation(eventId: String, ticketIds: Set<String>) {
+        for (ticketId in ticketIds) {
+            log.append(
+                eventId,
+                OperationType.TICKET_REMOVE,
+                buildJsonObject { put("ticketId", ticketId) },
+            )
+        }
+        project(log.replay(eventId))
+    }
+
+    /**
+     * Hides tickets this device has no authority over: their operations are forgotten locally.
+     *
+     * For an event somebody else created, where a signed removal would rightly be refused. If a
+     * server still holds these tickets they return at the next synchronisation — the caller is
+     * the one who knows whether that was also dealt with, and says so to the user.
+     */
+    suspend fun purgeTicketsLocally(eventId: String, ticketIds: Set<String>) {
+        log.purgeTickets(eventId, ticketIds)
+        for (ticketId in ticketIds) {
+            dao.deleteTicket(ticketId)
+        }
+        project(log.replay(eventId))
+    }
+
+    /**
+     * Forgets an event on this phone: rows, log, documents, files.
+     *
+     * Deliberately silent about the server — deleting there is a different act with different
+     * authority, and the caller does it (or cannot) and reports accordingly.
+     */
+    suspend fun purgeEventLocally(eventId: String) {
+        log.purgeEvent(eventId)
+        for (row in documents.forEvent(eventId)) {
+            documentStore.delete(row.id)
+            documents.delete(row.id)
+        }
+        dao.deleteTicketsOf(eventId)
+        dao.deleteEvent(eventId)
+    }
+
     /**
      * The barcode, decrypted only when it is about to be shown.
      *

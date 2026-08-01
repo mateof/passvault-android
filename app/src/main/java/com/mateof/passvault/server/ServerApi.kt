@@ -229,6 +229,20 @@ class ServerApi(private val settings: ServerSettings) {
         )
     }
 
+    /** Deletes an event on the server, whole. Refused unless this account created it. */
+    fun deleteEvent(eventId: String) {
+        call("/api/v1/events/$eventId", method = "DELETE")
+    }
+
+    /**
+     * Withdraws one ticket on the server, which writes the tombstone into the event's log —
+     * the server is the creator-authority for events born on the web, where a removal signed
+     * by this phone would rightly be refused.
+     */
+    fun withdrawTicket(ticketId: String) {
+        call("/api/v1/tickets/$ticketId/withdraw", buildJsonObject { })
+    }
+
     fun me(): Account {
         val result = call("/api/v1/me")
         return Account(

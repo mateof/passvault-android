@@ -42,6 +42,8 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.layout.Box
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Label
@@ -90,13 +92,21 @@ data class EventRow(
     /**
      * Whether it is over.
      *
-     * A day's grace, because a concert at nine last night is still the thing in your pocket on
-     * the way home and should not have sunk to the bottom of the wallet before you get there.
-     * An event with no date is never past: "we do not know when" is not "it already happened".
+     * An event with a time is past once that time is: the ticket for nine o'clock is a receipt
+     * at one minute past, and a wallet that keeps insisting otherwise for a day reads as broken.
+     * An event stored as midnight has only a date — "the 14th" is over when the 14th is, so it
+     * lasts until its local day ends. No date at all is never past: "we do not know when" is
+     * not "it already happened".
      */
     fun isPast(nowMillis: Long): Boolean {
-        val at = startsAt?.let { runCatching { java.time.Instant.parse(it).toEpochMilli() }.getOrNull() }
-        return at != null && at < nowMillis - 86_400_000L
+        val at = startsAt?.let { runCatching { java.time.Instant.parse(it) }.getOrNull() } ?: return false
+        val local = java.time.LocalDateTime.ofInstant(at, java.time.ZoneId.systemDefault())
+        val boundary = if (local.hour == 0 && local.minute == 0) {
+            at.toEpochMilli() + 86_400_000L
+        } else {
+            at.toEpochMilli()
+        }
+        return nowMillis > boundary
     }
 }
 
@@ -115,6 +125,10 @@ data class EventsUiState(
 fun EventsScreen(
     state: EventsUiState,
     onEventClick: (String) -> Unit,
+    /** Null while browsing. A set while choosing events to act on — entered by long press. */
+    selection: Set<String>? = null,
+    onToggleSelection: (String) -> Unit = {},
+    onStartSelection: (String) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val spacing = LocalSpacing.current
@@ -181,7 +195,14 @@ fun EventsScreen(
                     event = event,
                     tags = state.tags,
                     past = event.isPast(now),
-                    onClick = onEventClick,
+                    selected = selection?.contains(event.id),
+                    // While choosing, a tap toggles; a long press is how choosing begins.
+                    onClick = {
+                        if (selection == null) onEventClick(it) else onToggleSelection(it)
+                    },
+                    onLongClick = {
+                        if (selection == null) onStartSelection(it) else onToggleSelection(it)
+                    },
                 )
             }
 
@@ -327,41 +348,42 @@ private fun Toolbar(
     }
 }
 
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 private fun EventCard(
     event: EventRow,
     tags: List<com.mateof.passvault.server.Tag>,
     past: Boolean,
+    /** Null while browsing; true or false while some selection is under way. */
+    selected: Boolean?,
     onClick: (String) -> Unit,
+    onLongClick: (String) -> Unit,
 ) {
     val spacing = LocalSpacing.current
     val status = LocalStatusColours.current
-    val interactionSource = remember { MutableInteractionSource() }
-    val pressed by interactionSource.collectIsPressedAsState()
-
-    // Through graphicsLayer so the press runs on the render thread and skips layout entirely —
-    // the difference between a gesture that keeps up with a finger and one that stutters.
-    val scale by animateFloatAsState(
-        targetValue = if (pressed) 0.98f else 1f,
-        animationSpec = Motion.quick(),
-        label = "press",
-    )
 
     Card(
-        onClick = { onClick(event.id) },
-        interactionSource = interactionSource,
         modifier = Modifier
             .fillMaxWidth()
             // Faded rather than hidden. It has not stopped existing — it is a receipt now, and
             // somebody looking for last month's concert should still find it.
-            .graphicsLayer { scaleX = scale; scaleY = scale; alpha = if (past) 0.55f else 1f },
+            .graphicsLayer { alpha = if (past) 0.55f else 1f }
+            // combinedClickable instead of Card's own onClick: a long press is how deleting
+            // several events begins, and the clickable card has no ear for one.
+            .clip(MaterialTheme.shapes.large)
+            .combinedClickable(
+                onClick = { onClick(event.id) },
+                onLongClick = { onLongClick(event.id) },
+            ),
         shape = MaterialTheme.shapes.large,
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+            containerColor = if (selected == true) {
+                MaterialTheme.colorScheme.primaryContainer
+            } else {
+                MaterialTheme.colorScheme.surfaceContainerHigh
+            },
         ),
-        // Raised, and further when pressed. A flat card on a tinted background reads as a panel;
-        // one that lifts under a finger reads as an object, which is what a ticket stands for.
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp, pressedElevation = 8.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
     ) {
         Row(
             modifier = Modifier.padding(spacing.medium),

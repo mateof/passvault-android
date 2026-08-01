@@ -169,6 +169,12 @@ interface WalletDao {
     @Query("DELETE FROM tickets WHERE id = :ticketId")
     suspend fun deleteTicket(ticketId: String)
 
+    @Query("DELETE FROM tickets WHERE event_id = :eventId")
+    suspend fun deleteTicketsOf(eventId: String)
+
+    @Query("DELETE FROM events WHERE id = :eventId")
+    suspend fun deleteEvent(eventId: String)
+
     @Query("SELECT * FROM events WHERE id = :eventId")
     suspend fun event(eventId: String): EventEntity?
 

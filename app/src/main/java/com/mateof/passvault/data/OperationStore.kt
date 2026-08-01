@@ -115,6 +115,13 @@ interface OperationDao {
     @Query("SELECT COUNT(*) FROM operations WHERE event_id = :eventId")
     suspend fun countFor(eventId: String): Int
 
+    /** Forgets an event's whole log. Only deletion uses this; the log is append-only otherwise. */
+    @Query("DELETE FROM operations WHERE event_id = :eventId")
+    suspend fun deleteForEvent(eventId: String)
+
+    @Query("DELETE FROM operations WHERE operation_id IN (:operationIds)")
+    suspend fun deleteOperations(operationIds: List<String>)
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertDevice(device: DeviceEntity)
 

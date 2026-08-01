@@ -317,4 +317,42 @@
     <string name="delete_account_warning">The account on the server is removed: the vault, your events and their files, from the wallets of everyone who received them too. This cannot be undone. The local wallet on this phone survives.</string>
     <string name="delete_account_field">Password (or email, if you sign in with Google/a key)</string>
     <string name="delete_account_confirm">Delete for good</string>
+    <string name="action_delete">Delete</string>
+    <string name="share_send_card">Send tickets</string>
+    <string name="share_send_card_hint">Choose what to share and hand it to the receiving phone.</string>
+    <string name="share_receive_card">Receive tickets</string>
+    <string name="share_receive_card_hint">This phone waits for whatever is sent to it.</string>
+    <string name="share_send_explain">On the other phone open Share → Receive. Then pick it from the list, type its address, or hold the two phones together.</string>
+    <string name="share_receive_explain">Tell the other person to look for this name in their list, or to type the address.</string>
+    <string name="share_receive_own_name_hint">This is how this phone appears in the other one’s list. It can be changed in Settings.</string>
+    <string name="share_receive_waiting">Waiting for the other phone…</string>
+    <string name="share_manual_send_hint">Type the address shown on the receiving phone’s screen.</string>
+    <plurals name="share_sent_done">
+        <item quantity="one">Sent %1$d change</item>
+        <item quantity="other">Sent %1$d changes</item>
+    </plurals>
+    <string name="share_sent_detail">It is now on the phone “%1$s”.</string>
+    <string name="event_delete_action">Delete the event</string>
+    <string name="event_delete_confirm_text">Removes “%1$s” with its tickets and files. If a server is connected, there too — and for everyone it was shared with. This cannot be undone.</string>
+    <plurals name="events_delete_confirm">
+        <item quantity="one">Delete %1$d event?</item>
+        <item quantity="other">Delete %1$d events?</item>
+    </plurals>
+    <string name="events_delete_confirm_text">They are removed with their tickets and files. If a server is connected, there too. This cannot be undone.</string>
+    <plurals name="events_selected">
+        <item quantity="one">%1$d event</item>
+        <item quantity="other">%1$d events</item>
+    </plurals>
+    <plurals name="tickets_delete_confirm">
+        <item quantity="one">Delete %1$d ticket?</item>
+        <item quantity="other">Delete %1$d tickets?</item>
+    </plurals>
+    <string name="tickets_delete_confirm_text">They disappear from the event, for anyone it is shared with too. This cannot be undone.</string>
+    <string name="notice_deleted_everywhere">Deleted, from the server too.</string>
+    <string name="notice_deleted_device_only_server_keeps">Deleted on this phone. The server keeps it: it will return at the next sync.</string>
+    <string name="notice_deleted_device">Deleted from this phone.</string>
+    <string name="notice_tickets_deleted">Tickets deleted.</string>
+    <string name="notice_tickets_deleted_device">Tickets deleted on this phone. If a server holds them, they will return at the next sync.</string>
+    <string name="settings_device_name">This device’s name</string>
+    <string name="settings_device_name_explain">The name others see: in the sharing list and in the server’s session list.</string>
 </resources>

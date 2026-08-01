@@ -128,6 +128,25 @@ class ServerSettings(
         }.apply()
     }
 
+    /**
+     * What this phone is called wherever a person has to recognise it: the peer list on another
+     * phone, the session list on the server. The model is the default because it names the
+     * hardware, but "Pixel 8" names nobody in a family that bought two of them.
+     */
+    fun deviceName(): String =
+        preferences.getString(DEVICE_NAME, null)?.takeIf { it.isNotBlank() }
+            ?: listOf(android.os.Build.MANUFACTURER, android.os.Build.MODEL)
+                .filter { !it.isNullOrBlank() }
+                .joinToString(" ")
+                .ifBlank { "PassVault" }
+                .take(60)
+
+    fun setDeviceName(name: String?) {
+        preferences.edit().apply {
+            if (name.isNullOrBlank()) remove(DEVICE_NAME) else putString(DEVICE_NAME, name.trim().take(60))
+        }.apply()
+    }
+
     /** What the server should answer in: the chosen language first, the device's otherwise. */
     fun locale(): String = when (uiLocale() ?: Locale.getDefault().language) {
         "es" -> "es"
@@ -141,5 +160,6 @@ class ServerSettings(
         const val VAULT_PASSPHRASE = "vault_passphrase"
         const val UI_LOCALE = "ui_locale"
         const val EVENT_PASSWORD = "event_password:"
+        const val DEVICE_NAME = "device_name"
     }
 }

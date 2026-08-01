@@ -26,6 +26,7 @@ import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.Checklist
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.MoreVert
@@ -74,7 +75,6 @@ import com.mateof.passvault.ui.MainDrawerSheet
 import com.mateof.passvault.ui.ingest.IngestReviewScreen
 import com.mateof.passvault.ui.ingest.IngestReviewState
 import com.mateof.passvault.ui.ingest.ReviewRow
-import com.mateof.passvault.ui.share.ShareScreen
 import com.mateof.passvault.ui.share.ShareViewModel
 import com.mateof.passvault.ui.theme.Motion
 import com.mateof.passvault.ui.theme.PassVaultTheme
@@ -163,7 +163,12 @@ private sealed interface Screen {
      * which is the pager's job — so the route carries only where to start.
      */
     data class Ticket(val ticketId: String) : Screen
-    data class Share(val scope: ShareScope) : Screen
+    /** Handing tickets to a phone in the room, this side doing the giving. */
+    data class ShareSend(val scope: ShareScope) : Screen
+    /** The other side: named, findable, waiting. */
+    data object ShareReceive : Screen
+    /** The question that comes first: which side of the table is this phone. */
+    data object ShareChooser : Screen
     data class Document(val eventId: String) : Screen
     data object Notices : Screen
     data object Groups : Screen
@@ -240,6 +245,9 @@ private fun PassVaultApp(
     BackHandler(
         enabled = screen is Screen.Event ||
             screen is Screen.Tags ||
+            screen is Screen.ShareSend ||
+            screen is Screen.ShareReceive ||
+            screen is Screen.ShareChooser ||
             screen is Screen.SharePicker ||
             screen is Screen.Profile ||
             screen is Screen.Settings ||
@@ -361,7 +369,9 @@ private fun PassVaultApp(
         Screen.Tags -> Destination.Tags
         Screen.Profile -> Destination.Profile
         Screen.Settings -> Destination.Settings
-        is Screen.Share -> Destination.Share
+        is Screen.ShareSend -> Destination.Share
+        Screen.ShareReceive -> Destination.Share
+        Screen.ShareChooser -> Destination.Share
         Screen.SharePicker -> Destination.Share
         Screen.Server -> Destination.Server
         Screen.Updates -> Destination.Updates
@@ -378,19 +388,29 @@ private fun PassVaultApp(
             Destination.Tags -> Screen.Tags
             Destination.Profile -> Screen.Profile
             Destination.Settings -> Screen.Settings
-            // Through the picker, not straight to "everything". A drawer entry that
-            // silently offered the whole wallet taught people this screen was dangerous.
-            Destination.Share -> Screen.SharePicker
+            // Through the chooser: one phone gives and the other takes, and which this
+            // one is doing is the first decision, not something inferred from who taps first.
+            Destination.Share -> Screen.ShareChooser
             Destination.Server -> Screen.Server
             Destination.Updates -> Screen.Updates
         }
     }
 
-    // The gesture is enabled only on the wallet: a drawer that opens from the left edge of a
-    // detail screen fights the system back gesture, and back is what the user means there.
+    // The gesture is enabled on every screen the drawer itself leads to: they are siblings,
+    // not details, and each wears the menu button in its title bar for the same reason. Detail
+    // screens — an event, a ticket — keep the edge for the system back gesture.
+    val topLevel = screen is Screen.Wallet ||
+        screen is Screen.Notices ||
+        screen is Screen.Groups ||
+        screen is Screen.Tags ||
+        screen is Screen.Profile ||
+        screen is Screen.Settings ||
+        screen is Screen.Server ||
+        screen is Screen.Updates ||
+        screen is Screen.ShareChooser
     ModalNavigationDrawer(
         drawerState = drawer,
-        gesturesEnabled = screen is Screen.Wallet,
+        gesturesEnabled = topLevel,
         drawerContent = { MainDrawerSheet(current = destination, onSelect = goTo) },
     ) {
     Scaffold(snackbarHost = { SnackbarHost(snackbars) }) { padding ->
@@ -438,10 +458,11 @@ private fun PassVaultApp(
                         viewModel.openEvent(id)
                         screen = Screen.Event(id, name)
                     },
-                    onShare = { screen = Screen.Share(ShareScope.Everything) },
+                    onShare = { screen = Screen.ShareChooser },
                     onImport = { pickFile.launch(IMPORTABLE_TYPES) },
                     onCapture = { startCapture() },
                     onMenu = openDrawer,
+                    onDeleteEvents = { chosen -> viewModel.deleteEvents(chosen) },
                 )
                 is Screen.Event -> {
                     openEvent = current.id to current.name
@@ -477,7 +498,7 @@ private fun PassVaultApp(
                             viewModel.setEventTags(current.id, tagIds)
                         },
                         onShare = { chosen ->
-                            screen = Screen.Share(
+                            screen = Screen.ShareSend(
                                 if (chosen == null) {
                                     ShareScope.Event(current.id, current.name)
                                 } else {
@@ -488,6 +509,12 @@ private fun PassVaultApp(
                         onExport = { chosen, password ->
                             viewModel.export(current.id, chosen, password)
                         },
+                        onDeleteEvent = {
+                            viewModel.deleteEvents(listOf(current.id))
+                            viewModel.openEvent(null)
+                            screen = Screen.Wallet
+                        },
+                        onDeleteTickets = { chosen -> viewModel.deleteTickets(current.id, chosen) },
                     )
                 }
                 is Screen.Ticket -> TicketPager(
@@ -506,31 +533,50 @@ private fun PassVaultApp(
                         }
                     },
                 )
-                Screen.Notices -> NoticesPane(onBack = { screen = Screen.Wallet })
-                Screen.Groups -> GroupsPane(onBack = { screen = Screen.Wallet })
-                Screen.Tags -> TagsPane(onBack = { screen = Screen.Wallet })
+                Screen.Notices -> NoticesPane(onMenu = openDrawer)
+                Screen.Groups -> GroupsPane(onMenu = openDrawer)
+                Screen.Tags -> TagsPane(onMenu = openDrawer)
+                Screen.ShareChooser -> ShareChooserPane(
+                    onMenu = openDrawer,
+                    onSend = { screen = Screen.SharePicker },
+                    onReceive = { screen = Screen.ShareReceive },
+                )
                 Screen.SharePicker -> SharePickerPane(
                     events = eventsState.events,
                     tickets = eventTickets,
                     onLoadEvent = { id -> viewModel.openEvent(id) },
-                    onBack = { screen = Screen.Wallet },
-                    onChosen = { chosen -> screen = Screen.Share(chosen) },
+                    onBack = { screen = Screen.ShareChooser },
+                    onChosen = { chosen -> screen = Screen.ShareSend(chosen) },
                 )
-                Screen.Profile -> ProfilePane(onBack = { screen = Screen.Wallet })
-                Screen.Settings -> SettingsPane(onBack = { screen = Screen.Wallet })
-                Screen.Server -> ServerPane(onBack = { screen = Screen.Wallet })
-                Screen.Updates -> UpdatePane(onBack = { screen = Screen.Wallet })
+                Screen.Profile -> ProfilePane(
+                    onMenu = openDrawer,
+                    onDeleted = { screen = Screen.Wallet },
+                )
+                Screen.Settings -> SettingsPane(onMenu = openDrawer)
+                Screen.Server -> ServerPane(onMenu = openDrawer)
+                Screen.Updates -> UpdatePane(onMenu = openDrawer)
                 is Screen.Document -> DocumentPane(
                     state = documentState,
                     onBack = backFromDocument,
                 )
-                is Screen.Share -> SharePane(
+                is Screen.ShareSend -> ShareSendPane(
                     scope = current.scope,
+                    onBack = { screen = Screen.Wallet },
+                )
+                Screen.ShareReceive -> ShareReceivePane(
                     onBack = { screen = Screen.Wallet },
                 )
             }
         }
     }
+    }
+
+    val deletionNotice by viewModel.notice.collectAsStateWithLifecycle()
+    LaunchedEffect(deletionNotice) {
+        deletionNotice?.let {
+            snackbars.showSnackbar(it)
+            viewModel.consumeNotice()
+        }
     }
 
     val exported by viewModel.exported.collectAsStateWithLifecycle()
@@ -573,7 +619,7 @@ private fun PassVaultApp(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun UpdatePane(
-    onBack: () -> Unit,
+    onMenu: () -> Unit,
     viewModel: com.mateof.passvault.ui.update.UpdateViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -589,8 +635,11 @@ private fun UpdatePane(
             TopAppBar(
                 title = { Text(stringResource(R.string.update_title)) },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
+                    IconButton(onClick = onMenu) {
+                        Icon(
+                            Icons.Filled.Menu,
+                            contentDescription = stringResource(R.string.action_menu),
+                        )
                     }
                 },
             )
@@ -626,41 +675,105 @@ private fun WalletPane(
     onImport: () -> Unit,
     onCapture: () -> Unit,
     onMenu: () -> Unit,
+    onDeleteEvents: (List<String>) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     // Collapses as the list scrolls, giving the content the whole screen once the user is reading
     // rather than navigating.
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior(rememberTopAppBarState())
 
+    // Null while browsing; the chosen ids while a long press has the list in selection mode.
+    var selection by remember { mutableStateOf<Set<String>?>(null) }
+    var confirmingDelete by remember { mutableStateOf(false) }
+    BackHandler(enabled = selection != null) { selection = null }
+
+    if (confirmingDelete) {
+        val chosen = selection.orEmpty()
+        AlertDialog(
+            onDismissRequest = { confirmingDelete = false },
+            title = {
+                Text(pluralStringResource(R.plurals.events_delete_confirm, chosen.size, chosen.size))
+            },
+            text = { Text(stringResource(R.string.events_delete_confirm_text)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirmingDelete = false
+                    selection = null
+                    onDeleteEvents(chosen.toList())
+                }) {
+                    Text(
+                        text = stringResource(R.string.action_delete),
+                        color = androidx.compose.material3.MaterialTheme.colorScheme.error,
+                    )
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmingDelete = false }) {
+                    Text(stringResource(R.string.action_cancel))
+                }
+            },
+        )
+    }
+
     Scaffold(
         modifier = modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
-            MediumTopAppBar(
-                title = { Text(stringResource(R.string.events_title)) },
-                actions = {
-                    IconButton(onClick = onImport) {
-                        Icon(
-                            Icons.Filled.FolderOpen,
-                            contentDescription = stringResource(R.string.action_import),
-                        )
-                    }
-                    IconButton(onClick = onCapture) {
-                        Icon(
-                            Icons.Filled.PhotoCamera,
-                            contentDescription = stringResource(R.string.action_capture),
-                        )
-                    }
-                },
-                navigationIcon = {
-                    IconButton(onClick = onMenu) {
-                        Icon(
-                            Icons.Filled.Menu,
-                            contentDescription = stringResource(R.string.action_menu),
-                        )
-                    }
-                },
-                scrollBehavior = scrollBehavior,
-            )
+            val chosen = selection
+            if (chosen != null) {
+                // The contextual bar: what is chosen and the one thing to do about it. The
+                // cross leaves selection without doing anything, which must always be offered.
+                TopAppBar(
+                    title = {
+                        Text(pluralStringResource(R.plurals.events_selected, chosen.size, chosen.size))
+                    },
+                    navigationIcon = {
+                        IconButton(onClick = { selection = null }) {
+                            Icon(
+                                Icons.Filled.Close,
+                                contentDescription = stringResource(R.string.action_cancel),
+                            )
+                        }
+                    },
+                    actions = {
+                        IconButton(
+                            onClick = { confirmingDelete = true },
+                            enabled = chosen.isNotEmpty(),
+                        ) {
+                            Icon(
+                                Icons.Filled.Delete,
+                                contentDescription = stringResource(R.string.action_delete),
+                            )
+                        }
+                    },
+                )
+            } else {
+                MediumTopAppBar(
+                    title = { Text(stringResource(R.string.events_title)) },
+                    actions = {
+                        IconButton(onClick = onImport) {
+                            Icon(
+                                Icons.Filled.FolderOpen,
+                                contentDescription = stringResource(R.string.action_import),
+                            )
+                        }
+                        IconButton(onClick = onCapture) {
+                            Icon(
+                                Icons.Filled.PhotoCamera,
+                                contentDescription = stringResource(R.string.action_capture),
+                            )
+                        }
+                    },
+                    navigationIcon = {
+                        IconButton(onClick = onMenu) {
+                            Icon(
+                                Icons.Filled.Menu,
+                                contentDescription = stringResource(R.string.action_menu),
+                            )
+                        }
+                    },
+                    scrollBehavior = scrollBehavior,
+                )
+            }
         },
     ) { padding ->
         // The gesture a thumb already knows. It runs a real synchronisation, so what it promises
@@ -675,6 +788,11 @@ private fun WalletPane(
                 onEventClick = { id ->
                     onEventClick(id, state.events.firstOrNull { it.id == id }?.name.orEmpty())
                 },
+                selection = selection,
+                onToggleSelection = { id ->
+                    selection = selection?.let { if (id in it) it - id else it + id }
+                },
+                onStartSelection = { id -> selection = setOf(id) },
             )
         }
     }
@@ -705,7 +823,11 @@ private fun EventPane(
     onShare: (Set<String>?) -> Unit,
     /** The same scope, written to a file instead of handed to a phone in the room. */
     onExport: (Set<String>?, String) -> Unit,
+    onDeleteEvent: () -> Unit,
+    onDeleteTickets: (Set<String>) -> Unit,
 ) {
+    var confirmingEventDelete by remember { mutableStateOf(false) }
+    var confirmingTicketDelete by remember { mutableStateOf(false) }
     var exporting by remember { mutableStateOf(false) }
     var picking by remember { mutableStateOf(false) }
     var editingDetails by remember { mutableStateOf(false) }
@@ -717,6 +839,58 @@ private fun EventPane(
     // long press on a ticket is undiscoverable and this is the screen where somebody arrives
     // meaning to hand two seats to a friend.
     var selection by remember { mutableStateOf<Set<String>?>(null) }
+
+    if (confirmingEventDelete) {
+        AlertDialog(
+            onDismissRequest = { confirmingEventDelete = false },
+            title = { Text(stringResource(R.string.event_delete_action)) },
+            text = { Text(stringResource(R.string.event_delete_confirm_text, title)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirmingEventDelete = false
+                    onDeleteEvent()
+                }) {
+                    Text(
+                        text = stringResource(R.string.action_delete),
+                        color = androidx.compose.material3.MaterialTheme.colorScheme.error,
+                    )
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmingEventDelete = false }) {
+                    Text(stringResource(R.string.action_cancel))
+                }
+            },
+        )
+    }
+
+    if (confirmingTicketDelete) {
+        val chosen = selection.orEmpty()
+        AlertDialog(
+            onDismissRequest = { confirmingTicketDelete = false },
+            title = {
+                Text(pluralStringResource(R.plurals.tickets_delete_confirm, chosen.size, chosen.size))
+            },
+            text = { Text(stringResource(R.string.tickets_delete_confirm_text)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirmingTicketDelete = false
+                    selection = null
+                    onDeleteTickets(chosen)
+                }) {
+                    Text(
+                        text = stringResource(R.string.action_delete),
+                        color = androidx.compose.material3.MaterialTheme.colorScheme.error,
+                    )
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmingTicketDelete = false }) {
+                    Text(stringResource(R.string.action_cancel))
+                }
+            },
+        )
+    }
 
     if (exporting) {
         com.mateof.passvault.ui.wallet.ExportDialog(
@@ -859,6 +1033,11 @@ private fun EventPane(
                                     leadingIcon = { Icon(Icons.Filled.Save, null) },
                                     onClick = { menuOpen = false; exporting = true },
                                 )
+                                DropdownMenuItem(
+                                    text = { Text(stringResource(R.string.event_delete_action)) },
+                                    leadingIcon = { Icon(Icons.Filled.Delete, null) },
+                                    onClick = { menuOpen = false; confirmingEventDelete = true },
+                                )
                             }
                         }
                     } else {
@@ -881,6 +1060,15 @@ private fun EventPane(
                             Icon(
                                 Icons.Filled.Save,
                                 contentDescription = stringResource(R.string.action_export),
+                            )
+                        }
+                        IconButton(
+                            onClick = { confirmingTicketDelete = true },
+                            enabled = selection?.isNotEmpty() == true,
+                        ) {
+                            Icon(
+                                Icons.Filled.Delete,
+                                contentDescription = stringResource(R.string.action_delete),
                             )
                         }
                         IconButton(onClick = { selection = null }) {
@@ -934,7 +1122,7 @@ private fun EventPane(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ServerPane(
-    onBack: () -> Unit,
+    onMenu: () -> Unit,
     sharingEventId: String? = null,
     sharingEventName: String? = null,
     viewModel: com.mateof.passvault.ui.server.ServerViewModel = hiltViewModel(),
@@ -961,8 +1149,11 @@ private fun ServerPane(
             TopAppBar(
                 title = { Text(stringResource(R.string.server_title)) },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
+                    IconButton(onClick = onMenu) {
+                        Icon(
+                            Icons.Filled.Menu,
+                            contentDescription = stringResource(R.string.action_menu),
+                        )
                     }
                 },
             )
@@ -982,20 +1173,20 @@ private fun ServerPane(
             onEnrolTotp = viewModel::enrolTotp,
             onConfirmTotp = viewModel::confirmTotp,
             onSignOut = viewModel::signOut,
+            // Fired, not asked about first. `resolveActivity` needs a `<queries>` declaration
+            // since Android 11 and returns null without one even when three browsers are
+            // installed — the button that "did nothing" was this check refusing to believe in
+            // them. Starting the intent and catching the miss asks the only party that knows.
             onOpenAdmin = {
-                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(viewModel.adminUrl()))
-                if (intent.resolveActivity(context.packageManager) != null) {
-                    context.startActivity(intent)
+                runCatching {
+                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(viewModel.adminUrl())))
                 }
             },
             onOpenUri = { uri ->
                 // Whatever registered for `otpauth:` — Google Authenticator, Microsoft
                 // Authenticator, Aegis, a password manager. If nothing did, the key is on
                 // screen to be typed rather than the tap doing nothing.
-                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(uri))
-                if (intent.resolveActivity(context.packageManager) != null) {
-                    context.startActivity(intent)
-                }
+                runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(uri))) }
             },
             sharingEventName = sharingEventName,
             modifier = Modifier.padding(padding),
@@ -1035,7 +1226,8 @@ private fun DocumentPane(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ProfilePane(
-    onBack: () -> Unit,
+    onMenu: () -> Unit,
+    onDeleted: () -> Unit,
     viewModel: com.mateof.passvault.ui.server.ServerViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -1047,8 +1239,11 @@ private fun ProfilePane(
             TopAppBar(
                 title = { Text(stringResource(R.string.profile_title)) },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
+                    IconButton(onClick = onMenu) {
+                        Icon(
+                            Icons.Filled.Menu,
+                            contentDescription = stringResource(R.string.action_menu),
+                        )
                     }
                 },
             )
@@ -1060,7 +1255,7 @@ private fun ProfilePane(
             onSaveHandle = viewModel::saveHandle,
             onRevokeSession = viewModel::revokeSession,
             onSignOut = viewModel::signOut,
-            onDeleteAccount = { secret -> viewModel.deleteAccount(secret, onDeleted = onBack) },
+            onDeleteAccount = { secret -> viewModel.deleteAccount(secret, onDeleted = onDeleted) },
             modifier = Modifier.padding(padding),
         )
     }
@@ -1075,7 +1270,7 @@ private fun ProfilePane(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun SettingsPane(
-    onBack: () -> Unit,
+    onMenu: () -> Unit,
     viewModel: com.mateof.passvault.ui.server.ServerViewModel = hiltViewModel(),
 ) {
     val activity = LocalContext.current as? android.app.Activity
@@ -1085,8 +1280,11 @@ private fun SettingsPane(
             TopAppBar(
                 title = { Text(stringResource(R.string.settings_title)) },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
+                    IconButton(onClick = onMenu) {
+                        Icon(
+                            Icons.Filled.Menu,
+                            contentDescription = stringResource(R.string.action_menu),
+                        )
                     }
                 },
             )
@@ -1100,6 +1298,8 @@ private fun SettingsPane(
                 // half the screens in the old language until they happen to recompose.
                 activity?.recreate()
             },
+            deviceName = viewModel.deviceName(),
+            onDeviceNameSaved = viewModel::setDeviceName,
             modifier = Modifier.padding(padding),
         )
     }
@@ -1111,7 +1311,7 @@ private fun SettingsPane(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun TagsPane(
-    onBack: () -> Unit,
+    onMenu: () -> Unit,
     viewModel: com.mateof.passvault.ui.tags.TagsViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -1123,8 +1323,11 @@ private fun TagsPane(
             TopAppBar(
                 title = { Text(stringResource(R.string.tags_title)) },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
+                    IconButton(onClick = onMenu) {
+                        Icon(
+                            Icons.Filled.Menu,
+                            contentDescription = stringResource(R.string.action_menu),
+                        )
                     }
                 },
             )
@@ -1150,7 +1353,7 @@ private fun TagsPane(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun NoticesPane(
-    onBack: () -> Unit,
+    onMenu: () -> Unit,
     viewModel: com.mateof.passvault.ui.notices.NoticesViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -1162,8 +1365,11 @@ private fun NoticesPane(
             TopAppBar(
                 title = { Text(stringResource(R.string.notices_title)) },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
+                    IconButton(onClick = onMenu) {
+                        Icon(
+                            Icons.Filled.Menu,
+                            contentDescription = stringResource(R.string.action_menu),
+                        )
                     }
                 },
             )
@@ -1188,7 +1394,7 @@ private fun NoticesPane(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun GroupsPane(
-    onBack: () -> Unit,
+    onMenu: () -> Unit,
     viewModel: com.mateof.passvault.ui.groups.GroupsViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -1200,8 +1406,11 @@ private fun GroupsPane(
             TopAppBar(
                 title = { Text(stringResource(R.string.groups_title)) },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
+                    IconButton(onClick = onMenu) {
+                        Icon(
+                            Icons.Filled.Menu,
+                            contentDescription = stringResource(R.string.action_menu),
+                        )
                     }
                 },
             )
@@ -1375,22 +1584,94 @@ private fun SharePickerPane(
 }
 
 /**
- * Passing tickets to a phone in the same room.
+ * The fork: give or take.
  *
- * The permission is asked for here, at the moment the user chose to share, rather than at startup.
- * Android 13 replaced the location permission this needs with `NEARBY_WIFI_DEVICES`; on anything
- * older the manifest's scoped location entry covers it, so there is nothing to request.
+ * The first design had no fork — both phones did everything at once, and two people each waited
+ * for the other's phone to make the first move. Saying the roles out loud costs one tap and
+ * removes the mutual waiting, which was most of what "sharing does not work" turned out to be.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun SharePane(
+private fun ShareChooserPane(
+    onMenu: () -> Unit,
+    onSend: () -> Unit,
+    onReceive: () -> Unit,
+) {
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text(stringResource(R.string.action_share)) },
+                navigationIcon = {
+                    IconButton(onClick = onMenu) {
+                        Icon(
+                            Icons.Filled.Menu,
+                            contentDescription = stringResource(R.string.action_menu),
+                        )
+                    }
+                },
+            )
+        },
+    ) { padding ->
+        androidx.compose.foundation.layout.Column(
+            modifier = Modifier
+                .padding(padding)
+                .padding(16.dp),
+            verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(12.dp),
+        ) {
+            androidx.compose.material3.Card(
+                onClick = onSend,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                androidx.compose.foundation.layout.Column(Modifier.padding(20.dp)) {
+                    Text(
+                        text = stringResource(R.string.share_send_card),
+                        style = androidx.compose.material3.MaterialTheme.typography.titleLarge,
+                    )
+                    Text(
+                        text = stringResource(R.string.share_send_card_hint),
+                        style = androidx.compose.material3.MaterialTheme.typography.bodyMedium,
+                        color = androidx.compose.material3.MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+            androidx.compose.material3.Card(
+                onClick = onReceive,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                androidx.compose.foundation.layout.Column(Modifier.padding(20.dp)) {
+                    Text(
+                        text = stringResource(R.string.share_receive_card),
+                        style = androidx.compose.material3.MaterialTheme.typography.titleLarge,
+                    )
+                    Text(
+                        text = stringResource(R.string.share_receive_card_hint),
+                        style = androidx.compose.material3.MaterialTheme.typography.bodyMedium,
+                        color = androidx.compose.material3.MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * The giving side.
+ *
+ * The permission is asked for here, at the moment the user chose to share, rather than at
+ * startup. Android 13 replaced the location permission this needs with `NEARBY_WIFI_DEVICES`;
+ * on anything older the manifest's scoped location entry covers it, so there is nothing to
+ * request. The NFC reader is armed on this side only: the receiver wears the tag, the sender
+ * touches it — two readers and two tags was a race nobody could win.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ShareSendPane(
     scope: ShareScope,
     onBack: () -> Unit,
     viewModel: ShareViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
-    val deviceName = remember { android.os.Build.MODEL ?: "PassVault" }
 
     var granted by remember {
         mutableStateOf(
@@ -1405,27 +1686,16 @@ private fun SharePane(
         androidx.activity.result.contract.ActivityResultContracts.RequestPermission(),
     ) { allowed -> granted = allowed }
 
-    // Before anything is advertised, so a phone never offers more than the screen said it would.
-    LaunchedEffect(scope) { viewModel.offer(scope) }
-
     LaunchedEffect(granted) {
         if (granted) {
-            viewModel.start(deviceName)
+            viewModel.startSending(scope)
         } else {
             request.launch(android.Manifest.permission.NEARBY_WIFI_DEVICES)
         }
     }
 
-    /**
-     * Listening for the other phone to be held against this one.
-     *
-     * Both phones do this and both also publish a tag, so neither user has to be told which of
-     * them is "the reader" — whichever pair of hands moves first wins the race, and the other
-     * side's reader finds nothing because the transfer has already started.
-     *
-     * Only while this screen is up. Reader mode takes NFC away from the rest of the system, and an
-     * app that kept it after the user moved on would break every contactless payment on the phone.
-     */
+    // Only while this screen is up. Reader mode takes NFC away from the rest of the system, and
+    // an app that kept it after the user moved on would break every contactless payment.
     val activity = context as? android.app.Activity
     DisposableEffect(activity) {
         val reader = activity?.let { com.mateof.passvault.share.NfcReader(it) }
@@ -1436,14 +1706,12 @@ private fun SharePane(
         onDispose { reader?.stop() }
     }
 
-    // Leaving the screen tears down the advertisement and the listening socket. A phone that keeps
-    // announcing itself after the user has moved on is a phone anybody in the café can dial.
     DisposableEffect(Unit) { onDispose { viewModel.stop() } }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(stringResource(R.string.action_share)) },
+                title = { Text(stringResource(R.string.share_send_card)) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
@@ -1452,10 +1720,71 @@ private fun SharePane(
             )
         },
     ) { padding ->
-        ShareScreen(
+        com.mateof.passvault.ui.share.ShareSendScreen(
             state = state,
             onConnect = viewModel::connect,
             onConnectManual = viewModel::connectManual,
+            onDigitsMatch = viewModel::digitsMatch,
+            onDigitsDiffer = viewModel::digitsDiffer,
+            onDone = onBack,
+            modifier = Modifier.padding(padding),
+        )
+    }
+}
+
+/**
+ * The taking side: named, findable, waiting.
+ *
+ * No reader here — this phone wears the tag, through the card-emulation service, and the
+ * listening socket is torn down with the screen: a phone that keeps announcing itself after
+ * the user has moved on is a phone anybody in the café can dial.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ShareReceivePane(
+    onBack: () -> Unit,
+    viewModel: ShareViewModel = hiltViewModel(),
+) {
+    val state by viewModel.state.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+
+    var granted by remember {
+        mutableStateOf(
+            android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.TIRAMISU ||
+                androidx.core.content.ContextCompat.checkSelfPermission(
+                    context,
+                    android.Manifest.permission.NEARBY_WIFI_DEVICES,
+                ) == android.content.pm.PackageManager.PERMISSION_GRANTED,
+        )
+    }
+    val request = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.RequestPermission(),
+    ) { allowed -> granted = allowed }
+
+    LaunchedEffect(granted) {
+        if (granted) {
+            viewModel.startReceiving()
+        } else {
+            request.launch(android.Manifest.permission.NEARBY_WIFI_DEVICES)
+        }
+    }
+
+    DisposableEffect(Unit) { onDispose { viewModel.stop() } }
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text(stringResource(R.string.share_receive_card)) },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
+                    }
+                },
+            )
+        },
+    ) { padding ->
+        com.mateof.passvault.ui.share.ShareReceiveScreen(
+            state = state,
             onDigitsMatch = viewModel::digitsMatch,
             onDigitsDiffer = viewModel::digitsDiffer,
             onDone = onBack,

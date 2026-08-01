@@ -4,13 +4,14 @@ import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.mateof.passvault.data.DeviceKeys
+import com.mateof.passvault.server.ServerSettings
 import com.mateof.passvault.share.DiscoveredPeer
-import com.mateof.passvault.share.PairedPeer
-import com.mateof.passvault.share.PeerDiscovery
 import com.mateof.passvault.share.LocalPairing
 import com.mateof.passvault.share.NfcHandover
 import com.mateof.passvault.share.NfcHandoverSource
+import com.mateof.passvault.share.PairedPeer
 import com.mateof.passvault.share.PairingKeys
+import com.mateof.passvault.share.PeerDiscovery
 import com.mateof.passvault.share.ShareScope
 import com.mateof.passvault.share.Transfer
 import com.mateof.passvault.share.TransferClient
@@ -33,16 +34,18 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /**
- * Passing tickets to a phone in the same room.
+ * Passing tickets to a phone in the same room, with the roles said out loud.
  *
- * The sequence is fixed by the threat model and not by convenience: discover, greet, **stop and let
- * two people compare six digits**, and only then move anything. The pause in the middle is the
- * feature. Everything either side sends before it is an ephemeral public key, which is worth nothing
- * to whoever is listening.
+ * One phone **sends** and the other **receives**. The first design had every phone do both at
+ * once — advertise, browse, listen, read tags — which produced two users each waiting for the
+ * other's phone to appear, and a receiver that demanded an NFC token from a sender who had never
+ * read one, so every non-NFC transfer authenticated itself to death. The roles fix both: the
+ * receiver is the one that advertises, listens and wears the tag; the sender is the one that
+ * browses, types an address or taps.
  *
- * Both roles live here because a phone is both: it advertises so it can be found, and it browses so
- * it can find. Whoever taps first becomes the initiator, and that is the only difference between
- * them — it fixes the order the two keys are hashed in, so both derive the same digits.
+ * The sequence within a connection is unchanged and fixed by the threat model: greet, **stop and
+ * let two people compare six digits** (unless a tap already proved contact), and only then move
+ * anything. The pause in the middle is the feature.
  */
 @HiltViewModel
 class ShareViewModel @Inject constructor(
@@ -50,6 +53,7 @@ class ShareViewModel @Inject constructor(
     private val log: OperationLog,
     private val keys: DeviceKeys,
     private val wallet: com.mateof.passvault.data.WalletRepository,
+    private val settings: ServerSettings,
 ) : ViewModel() {
 
     private val discovery = PeerDiscovery(context)
@@ -59,33 +63,24 @@ class ShareViewModel @Inject constructor(
     /** Completed by the user tapping "the digits match", or cancelled by tapping the other button. */
     private var awaitingComparison: CompletableDeferred<Boolean>? = null
 
-    /**
-     * What this phone is offering.
-     *
-     * Everything, until a screen says otherwise. That is what this did before there was a choice,
-     * and it is still right for the case it was built for: two phones belonging to the same person.
-     */
+    /** What this phone is offering, when it is the sender. */
     private var scope: ShareScope = ShareScope.Everything
 
-    fun offer(chosen: ShareScope) {
-        scope = chosen
-        _state.value = _state.value.copy(scope = chosen)
-    }
-
     /**
-     * The keys and token this phone published on its tag, while it is advertising.
+     * The keys and token this phone published on its tag, while receiving.
      *
      * Held so the greeting can use the very pair whose public half was tapped: greeting with a
-     * fresh one would make the receiver's check fail and an honest tap look like an attack.
+     * fresh one would make the sender's check fail and an honest tap look like an attack.
      */
     private var tapKeys: PairingKeys? = null
     private var tapToken: ByteArray? = null
 
     /**
-     * This phone's own address, for the tag.
+     * This phone's own address, for the receiving screen.
      *
-     * Whatever interface is carrying the local network. A tag naming the loopback address is a tag
-     * the other phone cannot dial, and it is what `InetAddress.getLocalHost` returns on Android.
+     * Whatever interface is carrying the local network. A screen naming the loopback address is
+     * one the other phone cannot dial, and loopback is what `InetAddress.getLocalHost` returns
+     * on Android.
      */
     private fun localAddress(): String =
         java.net.NetworkInterface.getNetworkInterfaces().toList()
@@ -101,26 +96,46 @@ class ShareViewModel @Inject constructor(
     val state: StateFlow<ShareUiState> = _state.asStateFlow()
 
     /**
-     * Starts being findable and looking for others.
-     *
-     * The display name is the phone's own, which is what the other person will look for in a list.
-     * It is a label, not a credential: anybody can advertise any name, which is precisely why the
-     * digits exist.
+     * Becomes the sender: browses for receivers and offers nothing over the air until one is
+     * chosen and checked. No socket listens and no tag is worn — a sender is not a doorway.
      */
-    fun start(displayName: String) {
+    fun startSending(chosen: ShareScope) {
+        if (discovering != null) return
+        scope = chosen
+        _state.value = ShareUiState(
+            role = ShareRole.Sending,
+            stage = ShareStage.Looking,
+            scope = chosen,
+            ownName = settings.deviceName(),
+            tapReady = true,
+        )
+        discovering = viewModelScope.launch {
+            runCatching {
+                discovery.discover(null).collect { peers ->
+                    _state.value = _state.value.copy(peers = peers)
+                }
+            }
+        }
+    }
+
+    /**
+     * Becomes the receiver: listens, advertises under the device's name, and wears the NFC tag.
+     *
+     * The name and the address are on screen because they are how the person opposite finds
+     * this phone — by reading the list on theirs, or by typing what this screen says.
+     */
+    fun startReceiving() {
         if (server != null) return
+        val displayName = settings.deviceName()
         val listening = TransferServer { socket -> serve(socket) }
         val port = listening.start()
         server = listening
         discovery.advertise(port, displayName)
-        // The port the system handed out, logged so a transfer can be driven from a workstation
-        // with `adb forward`. mDNS does not cross the emulator's NAT, and a feature that can only be
-        // exercised with two physical phones in the room is one that does not get exercised.
-        android.util.Log.i(TAG, "listening on port $port as \"$displayName\"")
+        android.util.Log.i(TAG, "receiving on port $port as \"$displayName\"")
 
         // The tag carries the key this phone will greet with, a token authorising one session,
-        // and where to connect. Published only while this screen is up: a tag pointing at a socket
-        // that is no longer listening is worse than no tag.
+        // and where to connect. Published only while this screen is up: a tag pointing at a
+        // socket that is no longer listening is worse than no tag.
         val keysForTap = LocalPairing.generateKeys()
         val token = com.mateof.passvault.crypto.Primitives.randomBytes(32)
         tapKeys = keysForTap
@@ -136,19 +151,12 @@ class ShareViewModel @Inject constructor(
             ),
         )
 
-        _state.value = _state.value.copy(
+        _state.value = ShareUiState(
+            role = ShareRole.Receiving,
             stage = ShareStage.Looking,
             ownName = displayName,
-            tapReady = true,
-            // Where this phone can be dialled by hand. Discovery is the nice path; this is the
-            // one that works on routers that eat mDNS, which is a lot of them.
             ownAddress = "${localAddress()}:$port",
         )
-        discovering = viewModelScope.launch {
-            discovery.discover(displayName).collect { peers ->
-                _state.value = _state.value.copy(peers = peers)
-            }
-        }
     }
 
     fun stop() {
@@ -166,11 +174,11 @@ class ShareViewModel @Inject constructor(
     }
 
     /**
-     * Dials the phone that was just touched.
+     * Dials the phone that was just touched. Sender side.
      *
-     * The handover carries the address, so no list is browsed and no name is guessed — and the key
-     * it carries is checked against the one the socket presents, which is what replaces the two
-     * humans comparing six digits.
+     * The handover carries the address, so no list is browsed and no name is guessed — and the
+     * key it carries is checked against the one the socket presents, which is what replaces the
+     * two humans comparing six digits.
      */
     fun connectTapped(handover: NfcHandover) {
         viewModelScope.launch {
@@ -181,7 +189,7 @@ class ShareViewModel @Inject constructor(
             withContext(Dispatchers.IO) {
                 runCatching {
                     TransferClient.connect(handover.host, handover.port).use { socket ->
-                        converse(socket, isInitiator = true, tapped = handover)
+                        converse(socket, isSender = true, tapped = handover)
                     }
                 }.onFailure { report(it) }
             }
@@ -194,14 +202,14 @@ class ShareViewModel @Inject constructor(
      * Almost always the phones being separated too early, which is worth saying rather than
      * swallowing: the user is holding two objects together and needs to know whether to try again.
      */
-    fun reportTapFailure(cause: com.mateof.passvault.share.TransferException) {
+    fun reportTapFailure(cause: TransferException) {
         if (_state.value.stage == ShareStage.Looking || _state.value.stage == ShareStage.Idle) {
             _state.value = _state.value.copy(stage = ShareStage.Failed, failure = cause.code)
         }
     }
 
     /**
-     * Dials an address somebody read off the other phone's screen.
+     * Dials an address somebody read off the receiving phone's screen.
      *
      * The fallback for a network where discovery is blocked. Exactly as safe as tapping a name
      * in the list: neither proves anything, which is why both end in the same six digits.
@@ -219,54 +227,65 @@ class ShareViewModel @Inject constructor(
             withContext(Dispatchers.IO) {
                 runCatching {
                     TransferClient.connect(host, port).use { socket ->
-                        converse(socket, isInitiator = true)
+                        converse(socket, isSender = true)
                     }
                 }.onFailure { report(it) }
             }
         }
     }
 
-    /** Dials a peer the user picked. This side becomes the initiator. */
+    /** Dials a receiver the user picked from the list. */
     fun connect(peer: DiscoveredPeer) {
         viewModelScope.launch {
             _state.value = _state.value.copy(stage = ShareStage.Greeting, peerName = peer.name)
             withContext(Dispatchers.IO) {
                 runCatching {
-                    TransferClient.connect(peer).use { socket -> converse(socket, isInitiator = true) }
+                    TransferClient.connect(peer).use { socket -> converse(socket, isSender = true) }
                 }.onFailure { report(it) }
             }
         }
     }
 
-    /** The other half: a peer dialled this phone. Runs on the server thread, not the main one. */
+    /** The receiving half: a sender dialled this phone. Runs on the server thread, not the main one. */
     private fun serve(socket: Socket) {
-        runCatching { converse(socket, isInitiator = false) }.onFailure { report(it) }
+        runCatching { converse(socket, isSender = false) }.onFailure { report(it) }
     }
 
-    private fun converse(socket: Socket, isInitiator: Boolean, tapped: NfcHandover? = null) {
+    private fun converse(socket: Socket, isSender: Boolean, tapped: NfcHandover? = null) {
         val identity = keys.identity()
         val peer = Transfer.greet(
             input = socket.getInputStream(),
             output = socket.getOutputStream(),
             deviceId = identity.deviceId,
             signingPublicKey = identity.signingPublicKey,
-            displayName = _state.value.ownName ?: "PassVault",
-            isInitiator = isInitiator,
-            // The advertising side greets with the pair it published; the tapping side checks the
-            // socket against the key it read. Both are null for a transfer nobody tapped, which
-            // falls back to the six digits exactly as before.
-            ephemeralKeys = if (tapped == null) tapKeys else null,
+            displayName = settings.deviceName(),
+            isInitiator = isSender,
+            // The receiver greets with the pair it published on its tag; the tapping sender
+            // checks the socket against the key it read. Both are null for a transfer nobody
+            // tapped, which falls back to the six digits.
+            ephemeralKeys = if (isSender) null else tapKeys,
             expectedPeerKey = tapped?.ephemeralPublicKey,
         )
 
-        // A tap already did what the digits do, and better: the key on the socket was checked
-        // against the one read off the other phone, and the token proves physical contact. Asking
-        // two people to compare six digits *as well* would teach them the step is ceremonial,
-        // which is the habit that makes it useless when it is the only check there is.
-        val bySight = tapped == null && tapToken == null
-        if (bySight) {
-            // Everything stops here until a human says the two screens match. A timeout would be
-            // worse than useless: it would train people to tap through the one step that works.
+        if (isSender) {
+            if (tapped != null) {
+                // The tap already did what the digits do, and better: the key on the socket was
+                // checked against the one read off the other phone. Asking two people to compare
+                // six digits *as well* would teach them the step is ceremonial.
+                _state.value = _state.value.copy(
+                    stage = ShareStage.Greeting,
+                    peerName = peer.displayName,
+                    pairedByTap = true,
+                )
+                Transfer.confirmAsSender(peer, token = tapped.token)
+            } else {
+                if (!askHuman(peer)) return
+                Transfer.confirmAsSender(peer, token = null)
+            }
+        } else {
+            // The receiver cannot yet know how this sender will authenticate — a tap presents
+            // the token, a list-pick presents nothing — so the digits go on screen at once and
+            // the sender's confirmation decides whether a human is still needed.
             val comparison = CompletableDeferred<Boolean>()
             awaitingComparison = comparison
             _state.value = _state.value.copy(
@@ -274,40 +293,60 @@ class ShareViewModel @Inject constructor(
                 digits = peer.shortAuthenticationString,
                 peerName = peer.displayName,
             )
-
-            val agreed = kotlinx.coroutines.runBlocking { comparison.await() }
-            awaitingComparison = null
-            if (!agreed) {
-                _state.value = _state.value.copy(stage = ShareStage.Cancelled, digits = null)
-                return
+            val presented = Transfer.awaitConfirmation(peer)
+            if (presented != null) {
+                awaitingComparison = null
+                val expected = tapToken
+                if (expected == null || !presented.contentEquals(expected)) {
+                    // A token this phone never published is a device that never touched it.
+                    throw TransferException(
+                        TransferError.DIGITS_MISMATCH,
+                        "the sender presented a tap token this phone did not publish",
+                    )
+                }
+                _state.value = _state.value.copy(
+                    stage = ShareStage.Greeting,
+                    pairedByTap = true,
+                    digits = null,
+                )
+            } else {
+                // Everything stops here until a human says the two screens match. A timeout
+                // would be worse than useless: it would train people to tap through the one
+                // step that works.
+                val agreed = kotlinx.coroutines.runBlocking { comparison.await() }
+                awaitingComparison = null
+                if (!agreed) {
+                    if (_state.value.stage != ShareStage.Attacked) {
+                        _state.value = _state.value.copy(stage = ShareStage.Cancelled, digits = null)
+                    }
+                    return
+                }
             }
-        } else {
-            _state.value = _state.value.copy(
-                stage = ShareStage.Greeting,
-                peerName = peer.displayName,
-                pairedByTap = true,
-            )
+            Transfer.acknowledge(peer)
         }
 
-        Transfer.confirm(
-            peer = peer,
-            isInitiator = isInitiator,
-            // The tapping side returns what it read; the advertising side demands it. Both null
-            // for a transfer nobody tapped, which leaves the digits doing the work as before.
-            token = tapped?.token,
-            expected = if (tapped == null) tapToken else null,
-        )
         _state.value = _state.value.copy(stage = ShareStage.Transferring)
-        exchange(peer, isInitiator)
+        exchange(peer, isSender)
     }
 
-    /**
-     * The operations this transfer is offering.
-     *
-     * Receiving is never narrowed — a phone takes whatever it is given, because the other side
-     * decided what to give and refusing part of it would only lose tickets. The scope is about
-     * what leaves, which is the direction with a privacy question attached.
-     */
+    /** Shows the digits and waits for the person. Sender side. */
+    private fun askHuman(peer: PairedPeer): Boolean {
+        val comparison = CompletableDeferred<Boolean>()
+        awaitingComparison = comparison
+        _state.value = _state.value.copy(
+            stage = ShareStage.Comparing,
+            digits = peer.shortAuthenticationString,
+            peerName = peer.displayName,
+        )
+        val agreed = kotlinx.coroutines.runBlocking { comparison.await() }
+        awaitingComparison = null
+        if (!agreed && _state.value.stage != ShareStage.Attacked) {
+            _state.value = _state.value.copy(stage = ShareStage.Cancelled, digits = null)
+        }
+        return agreed
+    }
+
+    /** The operations this transfer is offering, when sending. */
     private suspend fun offered(): List<com.mateof.passvault.sync.Operation> = when (val chosen = scope) {
         ShareScope.Everything -> log.allApplied()
         is ShareScope.Event -> log.appliedFor(chosen.eventId)
@@ -315,36 +354,37 @@ class ShareViewModel @Inject constructor(
     }
 
     /**
-     * The exchange itself: the same request and response the server speaks.
+     * The exchange, one direction only.
      *
-     * The initiator asks and the responder answers, so the two do not both start talking. Each side
-     * offers what it holds and takes what it lacks, so one round leaves both with the same log.
+     * The sender offers its scope; the receiver takes it and answers with nothing. The first
+     * design synchronised both ways, which meant "share one ticket" quietly also pulled the
+     * other wallet — technically symmetric, humanly wrong. Whoever wants the other direction
+     * turns the phones around and runs it again.
      */
-    private fun exchange(peer: PairedPeer, isInitiator: Boolean) = kotlinx.coroutines.runBlocking {
-        val mine = offered()
-        val received: Int
-
-        // Exactly one message each way, and the roles decide who speaks first so the two do not both
-        // start talking into a socket nobody is reading.
-        if (isInitiator) {
-            val answer = Transfer.requestSync(peer, mine)
-            received = log.accept(answer.operations).count { it.state == AcceptState.APPLIED }
+    private fun exchange(peer: PairedPeer, isSender: Boolean) = kotlinx.coroutines.runBlocking {
+        if (isSender) {
+            val mine = offered()
+            Transfer.requestSync(peer, mine)
+            _state.value = _state.value.copy(
+                stage = ShareStage.Done,
+                sentCount = mine.size,
+                receivedCount = 0,
+                digits = null,
+            )
         } else {
             val request = Transfer.readRequest(peer)
-            received = log.accept(request.operations).count { it.state == AcceptState.APPLIED }
-            Transfer.respond(peer, mine)
+            val received = log.accept(request.operations).count { it.state == AcceptState.APPLIED }
+            Transfer.respond(peer, emptyList())
+            // The log holding an operation is not the same as the user seeing a ticket.
+            // Projecting here is what turns a successful exchange into something visible.
+            wallet.projectAll()
+            _state.value = _state.value.copy(
+                stage = ShareStage.Done,
+                sentCount = 0,
+                receivedCount = received,
+                digits = null,
+            )
         }
-
-        // The log holding an operation is not the same as the user seeing a ticket. Projecting here
-        // is what turns a successful exchange into something visible in the wallet.
-        wallet.projectAll()
-
-        _state.value = _state.value.copy(
-            stage = ShareStage.Done,
-            sentCount = mine.size,
-            receivedCount = received,
-            digits = null,
-        )
     }
 
     fun digitsMatch() {
@@ -352,8 +392,8 @@ class ShareViewModel @Inject constructor(
     }
 
     fun digitsDiffer() {
-        awaitingComparison?.complete(false)
         _state.value = _state.value.copy(stage = ShareStage.Attacked, digits = null)
+        awaitingComparison?.complete(false)
     }
 
     private fun report(cause: Throwable) {
@@ -374,6 +414,9 @@ class ShareViewModel @Inject constructor(
     }
 }
 
+/** Which side of the table this phone is. */
+enum class ShareRole { Sending, Receiving }
+
 enum class ShareStage {
     Idle,
     Looking,
@@ -389,15 +432,16 @@ enum class ShareStage {
 }
 
 data class ShareUiState(
+    val role: ShareRole = ShareRole.Sending,
     val stage: ShareStage = ShareStage.Idle,
-    /** True once this phone is publishing a tag, so the screen can say "hold them together". */
+    /** True while the sender's NFC reader is armed, so the screen can say "hold them together". */
     val tapReady: Boolean = false,
     /** True when a tap authenticated this transfer and no digits were shown. */
     val pairedByTap: Boolean = false,
     /** What is about to leave this phone, so the screen can say so before it does. */
     val scope: ShareScope = ShareScope.Everything,
     val ownName: String? = null,
-    /** host:port, readable off this screen so the other phone can dial it by hand. */
+    /** host:port, readable off the receiving screen so the sender can dial it by hand. */
     val ownAddress: String? = null,
     val peers: List<DiscoveredPeer> = emptyList(),
     val peerName: String? = null,
