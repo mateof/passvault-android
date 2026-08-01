@@ -280,4 +280,5 @@
     <string name="event_password_new">New password</string>
     <string name="event_password_change">Change the password</string>
     <string name="action_copy">Copy</string>
+    <string name="action_more">More options</string>
 </resources>

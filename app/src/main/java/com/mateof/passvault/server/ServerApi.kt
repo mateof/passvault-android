@@ -493,9 +493,19 @@ class ServerApi(private val settings: ServerSettings) {
             .text("handle")
             .orEmpty()
 
-    fun handleTaken(handle: String): Boolean =
-        call("/api/v1/directory/handle?handle=" + java.net.URLEncoder.encode(handle, "UTF-8"))["taken"]
-            ?.jsonPrimitive?.content == "true"
+    /**
+     * Whether a handle is taken by somebody else.
+     *
+     * "Taken by you" reports false: a form has to treat your own name as available to you, or
+     * typing exactly the handle you already hold gets refused — which is what happened.
+     */
+    fun handleTaken(handle: String): Boolean {
+        val result =
+            call("/api/v1/directory/handle?handle=" + java.net.URLEncoder.encode(handle, "UTF-8"))
+        val taken = result["taken"]?.jsonPrimitive?.content == "true"
+        val mine = result["mine"]?.jsonPrimitive?.content == "true"
+        return taken && !mine
+    }
 
     /** Shares with somebody named the way people name each other, rather than by identifier. */
     fun shareEventWithHandle(eventId: String, handle: String) {

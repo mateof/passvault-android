@@ -11,6 +11,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.padding
@@ -25,6 +26,7 @@ import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.Checklist
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.runtime.DisposableEffect
@@ -35,6 +37,8 @@ import androidx.compose.material3.rememberDrawerState
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MediumTopAppBar
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -647,6 +651,7 @@ private fun EventPane(
     var exporting by remember { mutableStateOf(false) }
     var picking by remember { mutableStateOf(false) }
     var editingDetails by remember { mutableStateOf(false) }
+    var menuOpen by remember { mutableStateOf(false) }
     var sharingWith by remember { mutableStateOf(false) }
     val sharing: com.mateof.passvault.ui.groups.SharingViewModel = hiltViewModel()
     val sharingState by sharing.state.collectAsStateWithLifecycle()
@@ -732,7 +737,13 @@ private fun EventPane(
                                 size = 28.dp,
                             )
                             Spacer(Modifier.width(12.dp))
-                            Text(title)
+                            // One line, cut with an ellipsis. Six icons once squeezed this into
+                            // a vertical ribbon of single letters.
+                            Text(
+                                text = title,
+                                maxLines = 1,
+                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                            )
                         }
                     } else {
                         Text(pluralStringResource(R.plurals.tickets_selected, chosen.size, chosen.size))
@@ -745,30 +756,6 @@ private fun EventPane(
                 },
                 actions = {
                     if (selection == null) {
-                        IconButton(onClick = { picking = true }) {
-                            Icon(
-                                Icons.Filled.Palette,
-                                contentDescription = stringResource(R.string.event_mark_title),
-                            )
-                        }
-                        IconButton(onClick = { editingDetails = true }) {
-                            Icon(
-                                Icons.Filled.CalendarToday,
-                                contentDescription = stringResource(R.string.event_when),
-                            )
-                        }
-                        IconButton(onClick = { selection = emptySet() }) {
-                            Icon(
-                                Icons.Filled.Checklist,
-                                contentDescription = stringResource(R.string.action_select),
-                            )
-                        }
-                        IconButton(onClick = { onShare(null) }) {
-                            Icon(
-                                Icons.Filled.Share,
-                                contentDescription = stringResource(R.string.action_share),
-                            )
-                        }
                         IconButton(onClick = {
                             sharing.load(eventId)
                             sharingWith = true
@@ -778,11 +765,43 @@ private fun EventPane(
                                 contentDescription = stringResource(R.string.sharing_title),
                             )
                         }
-                        IconButton(onClick = { exporting = true }) {
-                            Icon(
-                                Icons.Filled.Save,
-                                contentDescription = stringResource(R.string.action_export),
-                            )
+                        Box {
+                            IconButton(onClick = { menuOpen = true }) {
+                                Icon(
+                                    Icons.Filled.MoreVert,
+                                    contentDescription = stringResource(R.string.action_more),
+                                )
+                            }
+                            DropdownMenu(
+                                expanded = menuOpen,
+                                onDismissRequest = { menuOpen = false },
+                            ) {
+                                DropdownMenuItem(
+                                    text = { Text(stringResource(R.string.event_when)) },
+                                    leadingIcon = { Icon(Icons.Filled.CalendarToday, null) },
+                                    onClick = { menuOpen = false; editingDetails = true },
+                                )
+                                DropdownMenuItem(
+                                    text = { Text(stringResource(R.string.event_mark_title)) },
+                                    leadingIcon = { Icon(Icons.Filled.Palette, null) },
+                                    onClick = { menuOpen = false; picking = true },
+                                )
+                                DropdownMenuItem(
+                                    text = { Text(stringResource(R.string.action_select)) },
+                                    leadingIcon = { Icon(Icons.Filled.Checklist, null) },
+                                    onClick = { menuOpen = false; selection = emptySet() },
+                                )
+                                DropdownMenuItem(
+                                    text = { Text(stringResource(R.string.action_share)) },
+                                    leadingIcon = { Icon(Icons.Filled.Share, null) },
+                                    onClick = { menuOpen = false; onShare(null) },
+                                )
+                                DropdownMenuItem(
+                                    text = { Text(stringResource(R.string.action_export)) },
+                                    leadingIcon = { Icon(Icons.Filled.Save, null) },
+                                    onClick = { menuOpen = false; exporting = true },
+                                )
+                            }
                         }
                     } else {
                         // Sharing nothing is not a transfer, so the action waits until something

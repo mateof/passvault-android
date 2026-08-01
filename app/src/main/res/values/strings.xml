@@ -286,4 +286,5 @@
     <string name="event_password_new">Contrasinal novo</string>
     <string name="event_password_change">Cambiar o contrasinal</string>
     <string name="action_copy">Copiar</string>
+    <string name="action_more">Máis opcións</string>
 </resources>
