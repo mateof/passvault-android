@@ -336,7 +336,7 @@
     <string name="share_receive_card">Recibir entradas</string>
     <string name="share_receive_card_hint">Este móbil ponse á espera do que lle manden.</string>
     <string name="share_send_explain">No outro móbil abre Compartir → Recibir. Despois escólleo da lista, escribe o seu enderezo ou achega os dous móbiles.</string>
-    <string name="share_receive_explain">Dille á outra persoa que busque este nome na súa lista, ou que escriba o enderezo.</string>
+    <string name="share_receive_explain">Dille á outra persoa que busque este nome na súa lista, escriba o enderezo, ou simplemente achegue o seu móbil (o que envía) contra este.</string>
     <string name="share_receive_own_name_hint">Así aparece este móbil na lista do outro. Pódese cambiar en Axustes.</string>
     <string name="share_receive_waiting">Agardando polo outro móbil…</string>
     <string name="share_manual_send_hint">Escribe o enderezo que aparece na pantalla do móbil que recibe.</string>
@@ -373,4 +373,5 @@
     <string name="sharing_state_not_downloaded">aínda non descargado</string>
     <string name="sharing_revoke_confirm_clean">Esta persoa aínda non descargou o evento, así que quitarlle o acceso elimínao por completo para ela. Continuar?</string>
     <string name="sharing_revoke_confirm_downloaded">Esta persoa xa descargou o evento no seu dispositivo. Quitar o acceso impide que sincronice cambios novos, pero non borra o que xa ten: iso só desaparece se ela o elimina. Continuar?</string>
+    <string name="share_nfc_off">O NFC está apagado neste móbil, así que o toque non funcionará. Actívao nos axustes, ou usa a lista ou o enderezo.</string>
 </resources>

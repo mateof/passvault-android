@@ -330,7 +330,7 @@
     <string name="share_receive_card">Receive tickets</string>
     <string name="share_receive_card_hint">This phone waits for whatever is sent to it.</string>
     <string name="share_send_explain">On the other phone open Share → Receive. Then pick it from the list, type its address, or hold the two phones together.</string>
-    <string name="share_receive_explain">Tell the other person to look for this name in their list, or to type the address.</string>
+    <string name="share_receive_explain">Tell the other person to look for this name in their list, type the address, or just hold their phone (the one sending) against this one.</string>
     <string name="share_receive_own_name_hint">This is how this phone appears in the other one’s list. It can be changed in Settings.</string>
     <string name="share_receive_waiting">Waiting for the other phone…</string>
     <string name="share_manual_send_hint">Type the address shown on the receiving phone’s screen.</string>
@@ -367,4 +367,5 @@
     <string name="sharing_state_not_downloaded">not downloaded yet</string>
     <string name="sharing_revoke_confirm_clean">This person has not downloaded the event yet, so revoking removes it from them entirely. Continue?</string>
     <string name="sharing_revoke_confirm_downloaded">This person has already downloaded the event to their device. Revoking stops them syncing new changes, but does not delete what they already hold — that only goes if they delete it themselves. Continue?</string>
+    <string name="share_nfc_off">NFC is off on this phone, so the tap will not work. Turn it on in settings, or use the list or the address.</string>
 </resources>

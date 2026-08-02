@@ -1731,6 +1731,7 @@ private fun ShareSendPane(
             onDigitsMatch = viewModel::digitsMatch,
             onDigitsDiffer = viewModel::digitsDiffer,
             onDone = onBack,
+            nfcDisabled = nfcIsOff(context),
             modifier = Modifier.padding(padding),
         )
     }
@@ -1792,9 +1793,22 @@ private fun ShareReceivePane(
             onDigitsMatch = viewModel::digitsMatch,
             onDigitsDiffer = viewModel::digitsDiffer,
             onDone = onBack,
+            nfcDisabled = nfcIsOff(context),
             modifier = Modifier.padding(padding),
         )
     }
+}
+
+/**
+ * Whether this phone has NFC hardware but it is switched off.
+ *
+ * The one state worth calling out on a share screen: a tap simply cannot fire, and the person
+ * would otherwise keep touching two phones together wondering why nothing happens. A phone with no
+ * NFC at all is not warned — the list and the typed address are the whole story there.
+ */
+private fun nfcIsOff(context: android.content.Context): Boolean {
+    val adapter = android.nfc.NfcAdapter.getDefaultAdapter(context)
+    return adapter != null && !adapter.isEnabled
 }
 
 /**

@@ -52,6 +52,8 @@ fun ShareSendScreen(
     onDigitsMatch: () -> Unit,
     onDigitsDiffer: () -> Unit,
     onDone: () -> Unit,
+    /** True when the phone has NFC but it is switched off, so a tap will never fire. */
+    nfcDisabled: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     val spacing = LocalSpacing.current
@@ -73,11 +75,22 @@ fun ShareSendScreen(
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            Text(
-                text = stringResource(R.string.share_tap_hint),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            if (nfcDisabled) {
+                // Said in the primary tone, because it is the difference between "the tap is not
+                // working" and "the tap cannot work until you turn NFC on" — the list and the
+                // typed address still work regardless.
+                Text(
+                    text = stringResource(R.string.share_nfc_off),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
+            } else {
+                Text(
+                    text = stringResource(R.string.share_tap_hint),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
         if (state.pairedByTap) {
             Text(
@@ -133,6 +146,8 @@ fun ShareReceiveScreen(
     onDigitsMatch: () -> Unit,
     onDigitsDiffer: () -> Unit,
     onDone: () -> Unit,
+    /** True when the phone has NFC but it is switched off, so it cannot be tapped. */
+    nfcDisabled: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     val spacing = LocalSpacing.current
@@ -150,6 +165,14 @@ fun ShareReceiveScreen(
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+                if (nfcDisabled) {
+                    // The list and the typed address still work; only the tap needs NFC on.
+                    Text(
+                        text = stringResource(R.string.share_nfc_off),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
                 Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) {
                     Column(
                         modifier = Modifier.padding(spacing.medium),

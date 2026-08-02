@@ -37,11 +37,24 @@ class NfcReader(private val activity: Activity) {
         nfc.enableReaderMode(
             activity,
             { tag -> read(tag, onRead, onFailure) },
-            // Type A only, which is what an Android phone emulating a card presents. Platform
-            // sounds off: this screen says what happened, and a beep for a tag it then rejects is
-            // worse than silence.
-            NfcAdapter.FLAG_READER_NFC_A or NfcAdapter.FLAG_READER_NO_PLATFORM_SOUNDS,
-            null,
+            // Type A, which is what an Android phone emulating a card presents. Platform sounds
+            // off: this screen says what happened, and a beep for a tag it then rejects is noise.
+            //
+            // SKIP_NDEF_CHECK is the one that actually made taps work. Without it the platform
+            // probes the target for an NDEF tag the instant it appears, and that probe tears down
+            // the ISO-DEP session the emulated card is holding open — so the read that followed
+            // found nothing, and a tap "was not detected". An emulated card is never an NDEF tag;
+            // skipping the check leaves its session intact for the SELECT and READ below.
+            NfcAdapter.FLAG_READER_NFC_A or
+                NfcAdapter.FLAG_READER_NFC_B or
+                NfcAdapter.FLAG_READER_SKIP_NDEF_CHECK or
+                NfcAdapter.FLAG_READER_NO_PLATFORM_SOUNDS,
+            // A generous presence-check delay, because the platform polls the target to notice it
+            // leaving and an aggressive poll interrupts the very exchange this is here to do. Two
+            // phones held together by a hand wobble; the delay is what tolerates that.
+            android.os.Bundle().apply {
+                putInt(NfcAdapter.EXTRA_READER_PRESENCE_CHECK_DELAY, 5_000)
+            },
         )
     }
 
@@ -56,7 +69,15 @@ class NfcReader(private val activity: Activity) {
     ) {
         val isoDep = IsoDep.get(tag) ?: return
         try {
-            isoDep.connect()
+            // Connect, with one retry: the first attempt right as the phones meet catches the
+            // field still settling, and a bare failure there reads as "NFC does not work" when a
+            // second try 60ms later almost always succeeds.
+            try {
+                isoDep.connect()
+            } catch (_: Exception) {
+                Thread.sleep(60)
+                isoDep.connect()
+            }
             // Generous, because the phones are being held together by a human hand and a strict
             // timeout turns a slight wobble into a failure the user cannot interpret.
             isoDep.timeout = 5_000
