@@ -530,8 +530,13 @@ private fun slugifyHandle(value: String): String =
         .replace(Regex("\\p{Mn}+"), "")
         .lowercase()
         .replace(Regex("[^a-z0-9._-]+"), "-")
+        // Collapse runs and trim the ends: the server requires a handle to start and end with a
+        // letter or digit, so "mateo " must become "mateo", not "mateo-" — which was sent and
+        // came back an error the person could not have predicted, and would not save.
+        .replace(Regex("[._-]{2,}"), "-")
         .replace(Regex("^[._-]+"), "")
         .take(32)
+        .replace(Regex("[._-]+$"), "")
 
 enum class ServerStage { Address, SignIn, SecondFactor, Vault, Ready }
 
