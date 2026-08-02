@@ -61,6 +61,10 @@ fun ShareWithDialog(
     onShareWithGroup: (String) -> Unit,
     onShareWithPerson: () -> Unit,
     onRevoke: (AccessEntry) -> Unit,
+    /** The event's original files, so the creator can choose which to share with the server. */
+    documents: List<com.mateof.passvault.ui.wallet.DocumentRow> = emptyList(),
+    blockedDocuments: Set<String> = emptySet(),
+    onDocumentShared: (String, Boolean) -> Unit = { _, _ -> },
     onDismiss: () -> Unit,
 ) {
     val spacing = LocalSpacing.current
@@ -175,6 +179,45 @@ fun ShareWithDialog(
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
+                }
+
+                // The original files, and whether each one travels to the people this is shared
+                // with. Shown only when there are any: an event with no imported document has
+                // nothing to decide here.
+                if (documents.isNotEmpty()) {
+                    Divider(modifier = Modifier.padding(vertical = spacing.small))
+                    Text(
+                        text = stringResource(R.string.sharing_documents_title),
+                        style = MaterialTheme.typography.labelLarge,
+                    )
+                    Text(
+                        text = stringResource(R.string.sharing_documents_explain),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    for (document in documents) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            androidx.compose.material3.Switch(
+                                checked = document.id !in blockedDocuments,
+                                onCheckedChange = { shared -> onDocumentShared(document.id, shared) },
+                            )
+                            Text(
+                                text = stringResource(
+                                    R.string.share_picker_document,
+                                    document.pageCount,
+                                    android.text.format.Formatter.formatShortFileSize(
+                                        androidx.compose.ui.platform.LocalContext.current,
+                                        document.byteCount.toLong(),
+                                    ),
+                                ),
+                                modifier = Modifier.padding(start = spacing.small),
+                                style = MaterialTheme.typography.bodyMedium,
+                            )
+                        }
+                    }
                 }
 
                 Divider(modifier = Modifier.padding(vertical = spacing.small))

@@ -111,7 +111,19 @@ fun ShareSendScreen(
                     state.sentCount,
                     state.sentCount,
                 ),
-                detail = stringResource(R.string.share_sent_detail, state.peerName ?: ""),
+                detail = buildString {
+                    append(stringResource(R.string.share_sent_detail, state.peerName ?: ""))
+                    if (state.sentDocuments > 0) {
+                        append(' ')
+                        append(
+                            pluralStringResource(
+                                R.plurals.share_sent_documents,
+                                state.sentDocuments,
+                                state.sentDocuments,
+                            ),
+                        )
+                    }
+                },
                 onDone = onDone,
             )
             ShareStage.Cancelled -> Outcome(
@@ -216,7 +228,15 @@ fun ShareReceiveScreen(
                     state.receivedCount,
                     state.receivedCount,
                 ),
-                detail = null,
+                detail = if (state.receivedDocuments > 0) {
+                    pluralStringResource(
+                        R.plurals.share_received_documents,
+                        state.receivedDocuments,
+                        state.receivedDocuments,
+                    )
+                } else {
+                    null
+                },
                 onDone = onDone,
             )
             ShareStage.Cancelled -> Outcome(

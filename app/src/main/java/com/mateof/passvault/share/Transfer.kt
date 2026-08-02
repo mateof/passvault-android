@@ -41,6 +41,10 @@ object Transfer {
 
     private const val HELLO = "hello"
     private const val CONFIRM = "confirm"
+    private const val DOCUMENTS = "documents"
+
+    /** Well under the 8 MB frame limit, so any document is sent as a handful of sealed frames. */
+    private const val DOCUMENT_CHUNK_BYTES = 512 * 1024
 
     /**
      * Exchanges greetings and works out the digits.
@@ -80,6 +84,11 @@ object Transfer {
             put("name", displayName)
             put("ephemeralPublicKey", Base64Url.encode(ephemeral.publicKey))
             put("signingPublicKey", Base64Url.encode(signingPublicKey))
+            // A capability rather than a version bump: an older phone that never sends this simply
+            // reads as "no", and the document phase is skipped for it while the transfer still
+            // works. Bumping the version would have refused the pairing outright, which is a worse
+            // answer to "your friend has not updated yet" than "the tickets went, the file did not".
+            put("documents", true)
         }
 
         // Both sides write before either reads. Reading first on both ends is a deadlock, and
@@ -116,6 +125,7 @@ object Transfer {
             displayName = peerGreeting.string("name") ?: "",
             signingPublicKey = peerGreeting.key("signingPublicKey"),
             shortAuthenticationString = result.shortAuthenticationString,
+            supportsDocuments = peerGreeting["documents"]?.jsonPrimitive?.content == "true",
             session = TransferSession(input, output, result.sessionKey, isInitiator),
         )
     }
@@ -222,6 +232,68 @@ object Transfer {
         peer.session.send(response.toString().toByteArray(Charsets.UTF_8))
     }
 
+    /**
+     * The original files, after the log.
+     *
+     * A document is not an operation — it is the whole PDF the tickets were split out of, the map
+     * and the terms ingestion drops on purpose — so it travels beside the log rather than inside
+     * it, and only when the sender chose to include it. A manifest first, so the receiver knows how
+     * many files and how many bytes to expect, then each file's bytes in chunks well under the
+     * frame limit. Always sent between two phones that both speak the capability, even when empty,
+     * so the receiver's read never blocks waiting for a frame that is not coming.
+     */
+    fun sendDocuments(peer: PairedPeer, documents: List<OutgoingDocument>) {
+        val manifest = buildJsonObject {
+            put("kind", DOCUMENTS)
+            putJsonArray("items") {
+                documents.forEach { document ->
+                    add(
+                        buildJsonObject {
+                            put("id", document.id)
+                            put("eventId", document.eventId)
+                            put("mediaType", document.mediaType)
+                            put("pageCount", document.pageCount)
+                            put("byteCount", document.bytes.size)
+                        },
+                    )
+                }
+            }
+        }
+        peer.session.send(manifest.toString().toByteArray(Charsets.UTF_8))
+        for (document in documents) {
+            var offset = 0
+            while (offset < document.bytes.size) {
+                val end = minOf(offset + DOCUMENT_CHUNK_BYTES, document.bytes.size)
+                peer.session.send(document.bytes.copyOfRange(offset, end))
+                offset = end
+            }
+        }
+    }
+
+    /** The receiving half of [sendDocuments]: the manifest, then each file reassembled by size. */
+    fun receiveDocuments(peer: PairedPeer): List<IncomingDocument> {
+        val manifest = parse(peer.session.receive())
+        if (manifest.string("kind") != DOCUMENTS) {
+            throw TransferException(TransferError.PROTOCOL, "expected a documents manifest")
+        }
+        val items = manifest["items"]?.jsonArray.orEmpty().map { it.jsonObject }
+        return items.map { item ->
+            val byteCount = item["byteCount"]?.jsonPrimitive?.content?.toIntOrNull() ?: 0
+            val buffer = java.io.ByteArrayOutputStream(byteCount)
+            while (buffer.size() < byteCount) {
+                val chunk = peer.session.receive()
+                buffer.write(chunk)
+            }
+            IncomingDocument(
+                id = item.string("id").orEmpty(),
+                eventId = item.string("eventId").orEmpty(),
+                mediaType = item.string("mediaType") ?: "application/octet-stream",
+                pageCount = item["pageCount"]?.jsonPrimitive?.content?.toIntOrNull() ?: 0,
+                bytes = buffer.toByteArray(),
+            )
+        }
+    }
+
     private fun readExchange(message: JsonObject): SyncExchange {
         val operations = message["operations"]?.jsonArray.orEmpty()
         return SyncExchange(
@@ -251,8 +323,34 @@ class PairedPeer(
     val displayName: String,
     val signingPublicKey: ByteArray,
     val shortAuthenticationString: String,
+    /** Whether the peer speaks the document phase. A pre-document build reads as false. */
+    val supportsDocuments: Boolean,
     val session: TransferSession,
 )
+
+/** A file about to leave this phone: its metadata and the bytes, already decrypted. */
+class OutgoingDocument(
+    val id: String,
+    val eventId: String,
+    val mediaType: String,
+    val pageCount: Int,
+    val bytes: ByteArray,
+) {
+    override fun equals(other: Any?) = this === other
+    override fun hashCode() = System.identityHashCode(this)
+}
+
+/** A file that arrived, to be kept under the receiver's own key. */
+class IncomingDocument(
+    val id: String,
+    val eventId: String,
+    val mediaType: String,
+    val pageCount: Int,
+    val bytes: ByteArray,
+) {
+    override fun equals(other: Any?) = this === other
+    override fun hashCode() = System.identityHashCode(this)
+}
 
 data class SyncExchange(
     val kind: String,

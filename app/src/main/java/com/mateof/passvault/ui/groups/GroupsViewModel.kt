@@ -169,4 +169,7 @@ data class SharingUiState(
     val addressKnown: Boolean? = null,
     /** Set once a free ticket has been taken, so the screen can say so. */
     val claimed: Boolean = false,
+    /** Which of the event's originals are being kept off the server. Sharing is the default, so
+     *  this holds only the ones deliberately blocked. */
+    val blockedDocuments: Set<String> = emptySet(),
 )

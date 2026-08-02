@@ -481,6 +481,32 @@ class WalletRepository(
             StoredDocument(it.id, it.mediaType, it.pageCount, it.byteCount)
         }
 
+    /**
+     * The originals to hand to another phone, decrypted and ready to send.
+     *
+     * Only the ones the sender chose, and only those whose bytes are still on disk — a row whose
+     * file went missing is skipped rather than sent as an empty file. Decrypted here because they
+     * are about to leave under the transfer's own key, not this device's.
+     */
+    suspend fun outgoingDocuments(
+        documentIds: Collection<String>,
+    ): List<com.mateof.passvault.share.OutgoingDocument> =
+        documentIds.distinct().mapNotNull { id ->
+            val row = documents.byId(id) ?: return@mapNotNull null
+            val bytes = documentStore.read(id) ?: return@mapNotNull null
+            com.mateof.passvault.share.OutgoingDocument(
+                id = row.id,
+                eventId = row.eventId,
+                mediaType = row.mediaType,
+                pageCount = row.pageCount,
+                bytes = bytes,
+            )
+        }
+
+    /** Every original this wallet holds, for the "whole wallet" share to your own other phone. */
+    suspend fun allOutgoingDocuments(): List<com.mateof.passvault.share.OutgoingDocument> =
+        outgoingDocuments(documents.all().map { it.id })
+
     /** The decrypted bytes of one document, for rendering. Null if the file is gone. */
     suspend fun documentBytes(documentId: String): ByteArray? = documentStore.read(documentId)
 

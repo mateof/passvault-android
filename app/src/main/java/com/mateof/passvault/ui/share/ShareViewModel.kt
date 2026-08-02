@@ -353,6 +353,16 @@ class ShareViewModel @Inject constructor(
         is ShareScope.Tickets -> log.appliedFor(chosen.eventId, chosen.ticketIds.toSet())
     }
 
+    /** The original files this transfer is offering, when sending: whichever the sender chose. */
+    private suspend fun offeredDocuments(): List<com.mateof.passvault.share.OutgoingDocument> =
+        when (val chosen = scope) {
+            // The whole-wallet share carries every file to your other phone; a single-event share
+            // carries only the files ticked in the picker, and none by default.
+            ShareScope.Everything -> wallet.allOutgoingDocuments()
+            is ShareScope.Event -> wallet.outgoingDocuments(chosen.documentIds)
+            is ShareScope.Tickets -> wallet.outgoingDocuments(chosen.documentIds)
+        }
+
     /**
      * The exchange, one direction only.
      *
@@ -365,9 +375,18 @@ class ShareViewModel @Inject constructor(
         if (isSender) {
             val mine = offered()
             Transfer.requestSync(peer, mine)
+            // The files, after the log, and only to a phone that speaks the document phase — an
+            // older build reads as not speaking it, and the tickets still go without them.
+            var sentDocuments = 0
+            if (peer.supportsDocuments) {
+                val documents = offeredDocuments()
+                Transfer.sendDocuments(peer, documents)
+                sentDocuments = documents.size
+            }
             _state.value = _state.value.copy(
                 stage = ShareStage.Done,
                 sentCount = mine.size,
+                sentDocuments = sentDocuments,
                 receivedCount = 0,
                 digits = null,
             )
@@ -375,6 +394,22 @@ class ShareViewModel @Inject constructor(
             val request = Transfer.readRequest(peer)
             val received = log.accept(request.operations).count { it.state == AcceptState.APPLIED }
             Transfer.respond(peer, emptyList())
+            // The files the sender chose to include, kept under this phone's own key. Only when the
+            // sender speaks the phase, or there is no manifest coming and the read would block.
+            var receivedDocuments = 0
+            if (peer.supportsDocuments) {
+                val incoming = Transfer.receiveDocuments(peer)
+                for (document in incoming) {
+                    wallet.keepDocument(
+                        id = document.id,
+                        eventId = document.eventId,
+                        mediaType = document.mediaType,
+                        pageCount = document.pageCount,
+                        bytes = document.bytes,
+                    )
+                }
+                receivedDocuments = incoming.size
+            }
             // The log holding an operation is not the same as the user seeing a ticket.
             // Projecting here is what turns a successful exchange into something visible.
             wallet.projectAll()
@@ -382,6 +417,7 @@ class ShareViewModel @Inject constructor(
                 stage = ShareStage.Done,
                 sentCount = 0,
                 receivedCount = received,
+                receivedDocuments = receivedDocuments,
                 digits = null,
             )
         }
@@ -448,5 +484,8 @@ data class ShareUiState(
     val digits: String? = null,
     val sentCount: Int = 0,
     val receivedCount: Int = 0,
+    /** Original files handed over or taken in, alongside the tickets. */
+    val sentDocuments: Int = 0,
+    val receivedDocuments: Int = 0,
     val failure: TransferError? = null,
 )

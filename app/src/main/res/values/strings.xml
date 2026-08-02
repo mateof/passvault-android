@@ -374,4 +374,16 @@
     <string name="sharing_revoke_confirm_clean">Esta persoa aínda non descargou o evento, así que quitarlle o acceso elimínao por completo para ela. Continuar?</string>
     <string name="sharing_revoke_confirm_downloaded">Esta persoa xa descargou o evento no seu dispositivo. Quitar o acceso impide que sincronice cambios novos, pero non borra o que xa ten: iso só desaparece se ela o elimina. Continuar?</string>
     <string name="share_nfc_off">O NFC está apagado neste móbil, así que o toque non funcionará. Actívao nos axustes, ou usa a lista ou o enderezo.</string>
+    <string name="share_picker_documents">Ficheiros orixinais</string>
+    <string name="share_picker_document">%1$d páxinas · %2$s</string>
+    <plurals name="share_sent_documents">
+        <item quantity="one">e %1$d ficheiro orixinal</item>
+        <item quantity="other">e %1$d ficheiros orixinais</item>
+    </plurals>
+    <plurals name="share_received_documents">
+        <item quantity="one">e %1$d ficheiro orixinal</item>
+        <item quantity="other">e %1$d ficheiros orixinais</item>
+    </plurals>
+    <string name="sharing_documents_title">Ficheiros orixinais</string>
+    <string name="sharing_documents_explain">Se o activas, o ficheiro súbese ao servidor para quen teña acceso ao evento. Se o desactivas non se comparte; o que alguén xa descargase segue sendo seu.</string>
 </resources>

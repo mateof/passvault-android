@@ -153,6 +153,25 @@ class ServerSettings(
     }
 
     /**
+     * Whether the original file behind a document is kept off the server.
+     *
+     * The synchroniser uploads originals so that whoever an event is shared with can fetch them,
+     * which is the right default — but not always what somebody wants for a file with a name or a
+     * face on it. Blocking is stored rather than sharing, so the ordinary case needs no setting and
+     * only a deliberate "do not share this one" leaves a mark. A block stops future uploads; it
+     * cannot recall a copy a member already downloaded, the same honesty a revoke owes.
+     */
+    fun serverDocumentBlocked(documentId: String): Boolean =
+        preferences.getBoolean(DOC_BLOCKED + documentId, false)
+
+    fun setServerDocumentBlocked(documentId: String, blocked: Boolean) {
+        preferences.edit().apply {
+            if (blocked) putBoolean(DOC_BLOCKED + documentId, true)
+            else remove(DOC_BLOCKED + documentId)
+        }.apply()
+    }
+
+    /**
      * What this phone is called wherever a person has to recognise it: the peer list on another
      * phone, the session list on the server. The model is the default because it names the
      * hardware, but "Pixel 8" names nobody in a family that bought two of them.
@@ -185,6 +204,7 @@ class ServerSettings(
         const val VAULT_PASSPHRASE = "vault_passphrase"
         const val UI_LOCALE = "ui_locale"
         const val EVENT_PASSWORD = "event_password:"
+        const val DOC_BLOCKED = "doc_unshared:"
         const val DEVICE_NAME = "device_name"
     }
 }

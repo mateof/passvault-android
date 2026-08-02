@@ -544,6 +544,7 @@ private fun PassVaultApp(
                 Screen.SharePicker -> SharePickerPane(
                     events = eventsState.events,
                     tickets = eventTickets,
+                    documents = eventDocuments,
                     onLoadEvent = { id -> viewModel.openEvent(id) },
                     onBack = { screen = Screen.ShareChooser },
                     onChosen = { chosen -> screen = Screen.ShareSend(chosen) },
@@ -920,6 +921,9 @@ private fun EventPane(
             onShareWithGroup = { sharing.shareWithGroup(eventId, it) },
             onShareWithPerson = { sharing.shareWithPerson(eventId) },
             onRevoke = { sharing.revoke(eventId, it) },
+            documents = documents,
+            blockedDocuments = sharingState.blockedDocuments,
+            onDocumentShared = { id, shared -> sharing.setDocumentShared(id, shared) },
             onDismiss = { sharingWith = false },
         )
     }
@@ -990,6 +994,9 @@ private fun EventPane(
                     if (selection == null) {
                         IconButton(onClick = {
                             sharing.load(eventId)
+                            // Snapshot which originals are blocked, so the panel's switches start
+                            // from the truth rather than all-on.
+                            sharing.refreshDocumentSharing(documents.map { it.id })
                             sharingWith = true
                         }) {
                             Icon(
@@ -1447,6 +1454,7 @@ private fun GroupsPane(
 private fun SharePickerPane(
     events: List<com.mateof.passvault.ui.wallet.EventRow>,
     tickets: List<com.mateof.passvault.ui.wallet.TicketRow>,
+    documents: List<com.mateof.passvault.ui.wallet.DocumentRow>,
     onLoadEvent: (String?) -> Unit,
     onBack: () -> Unit,
     onChosen: (ShareScope) -> Unit,
@@ -1454,6 +1462,9 @@ private fun SharePickerPane(
     // Null while picking an event; an event while picking its tickets.
     var narrowing by remember { mutableStateOf<com.mateof.passvault.ui.wallet.EventRow?>(null) }
     var picked by remember { mutableStateOf(setOf<String>()) }
+    // The original files ticked to travel with the event. None by default: a file is an extra a
+    // person opts into, not something a share drags along unasked.
+    var pickedDocs by remember { mutableStateOf(setOf<String>()) }
 
     Scaffold(
         topBar = {
@@ -1464,6 +1475,7 @@ private fun SharePickerPane(
                         if (narrowing != null) {
                             narrowing = null
                             picked = emptySet()
+                            pickedDocs = emptySet()
                             onLoadEvent(null)
                         } else {
                             onBack()
@@ -1506,6 +1518,7 @@ private fun SharePickerPane(
                         onClick = {
                             narrowing = event
                             picked = emptySet()
+                            pickedDocs = emptySet()
                             onLoadEvent(event.id)
                         },
                         modifier = Modifier.fillMaxWidth(),
@@ -1532,7 +1545,15 @@ private fun SharePickerPane(
                 // Inside one event: hand over all of it, or tick the seats that travel.
                 item {
                     androidx.compose.material3.Card(
-                        onClick = { onChosen(ShareScope.Event(chosenEvent.id, chosenEvent.name)) },
+                        onClick = {
+                            onChosen(
+                                ShareScope.Event(
+                                    chosenEvent.id,
+                                    chosenEvent.name,
+                                    pickedDocs.toList(),
+                                ),
+                            )
+                        },
                         modifier = Modifier.fillMaxWidth(),
                     ) {
                         Text(
@@ -1542,6 +1563,44 @@ private fun SharePickerPane(
                         )
                     }
                 }
+
+                // The original files, ticked to travel or left behind. Shown only when there are
+                // any: an event built from a plain photo has none, and an empty heading is noise.
+                if (documents.isNotEmpty()) {
+                    item {
+                        Text(
+                            text = stringResource(R.string.share_picker_documents),
+                            style = androidx.compose.material3.MaterialTheme.typography.titleSmall,
+                            modifier = Modifier.padding(top = 8.dp),
+                        )
+                    }
+                    items(items = documents, key = { row -> "doc:${row.id}" }) { document ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            androidx.compose.material3.Checkbox(
+                                checked = document.id in pickedDocs,
+                                onCheckedChange = {
+                                    pickedDocs =
+                                        if (document.id in pickedDocs) pickedDocs - document.id
+                                        else pickedDocs + document.id
+                                },
+                            )
+                            Text(
+                                text = stringResource(
+                                    R.string.share_picker_document,
+                                    document.pageCount,
+                                    android.text.format.Formatter.formatShortFileSize(
+                                        androidx.compose.ui.platform.LocalContext.current,
+                                        document.byteCount.toLong(),
+                                    ),
+                                ),
+                            )
+                        }
+                    }
+                }
+
                 items(items = tickets, key = { row -> row.id }) { ticket ->
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -1566,7 +1625,12 @@ private fun SharePickerPane(
                     androidx.compose.material3.Button(
                         onClick = {
                             onChosen(
-                                ShareScope.Tickets(chosenEvent.id, chosenEvent.name, picked.toList()),
+                                ShareScope.Tickets(
+                                    chosenEvent.id,
+                                    chosenEvent.name,
+                                    picked.toList(),
+                                    pickedDocs.toList(),
+                                ),
                             )
                         },
                         // Sharing nothing is not a transfer: the button waits for a choice.

@@ -23,9 +23,41 @@ import kotlinx.coroutines.withContext
  */
 @HiltViewModel
 class SharingViewModel @Inject constructor(
+    @dagger.hilt.android.qualifiers.ApplicationContext private val context: android.content.Context,
     private val api: ServerApi,
     private val settings: com.mateof.passvault.server.ServerSettings,
 ) : ViewModel() {
+
+    /**
+     * Reads which of an event's originals are being kept off the server.
+     *
+     * Called when the sharing panel opens, because the flags live in preferences and the panel
+     * needs a snapshot to draw its checkboxes from. Sharing is the default, so only the ones a
+     * person deliberately blocked show up unticked.
+     */
+    fun refreshDocumentSharing(documentIds: List<String>) {
+        _state.value = _state.value.copy(
+            blockedDocuments = documentIds.filter { settings.serverDocumentBlocked(it) }.toSet(),
+        )
+    }
+
+    /**
+     * Chooses whether an original is shared with the people this event reaches.
+     *
+     * Turning it on schedules a sync at once, so the file lands on the server rather than waiting
+     * for the next quarter-hour tick — somebody who just said "yes, share it" means now. Turning
+     * it off only stops future uploads; a copy already downloaded is theirs, which the sharing
+     * text says plainly.
+     */
+    fun setDocumentShared(documentId: String, shared: Boolean) {
+        settings.setServerDocumentBlocked(documentId, blocked = !shared)
+        _state.value = _state.value.copy(
+            blockedDocuments = _state.value.blockedDocuments.let {
+                if (shared) it - documentId else it + documentId
+            },
+        )
+        if (shared) com.mateof.passvault.sync.SyncScheduler.syncNow(context)
+    }
 
     private val _state = MutableStateFlow(SharingUiState())
     val state: StateFlow<SharingUiState> = _state.asStateFlow()

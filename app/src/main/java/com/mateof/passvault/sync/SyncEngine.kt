@@ -145,6 +145,9 @@ class SyncEngine @Inject constructor(
         var down = 0
 
         for (document in here.filter { it.id !in theirIds }) {
+            // Held back on purpose, if its owner said so. The tickets still sync; only the original
+            // file stays off the server, which is the whole point of the choice.
+            if (settings.serverDocumentBlocked(document.id)) continue
             val bytes = wallet.documentBytes(document.id) ?: continue
             val stored = try {
                 api.uploadDocument(

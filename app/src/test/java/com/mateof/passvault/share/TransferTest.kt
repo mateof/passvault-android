@@ -115,6 +115,63 @@ class TransferTest {
     }
 
     @Test
+    fun `both sides advertise the document capability`() {
+        val (initiator, responder) = greetBothSides(Wire())
+
+        assertThat(initiator.supportsDocuments).isTrue()
+        assertThat(responder.supportsDocuments).isTrue()
+    }
+
+    @Test
+    fun `an original file travels whole from sender to receiver`() {
+        val wire = Wire()
+        val (initiator, responder) = greetBothSides(wire)
+        val bytes = "the map, the terms, the pages with no barcode".toByteArray()
+        val document = OutgoingDocument("doc-1", "event-1", "application/pdf", 3, bytes)
+
+        val send = async { Transfer.sendDocuments(initiator, listOf(document)) }
+        val got = async { Transfer.receiveDocuments(responder) }
+        send.get(10, TimeUnit.SECONDS)
+
+        val received = got.get(10, TimeUnit.SECONDS)
+        assertThat(received).hasSize(1)
+        assertThat(received[0].id).isEqualTo("doc-1")
+        assertThat(received[0].eventId).isEqualTo("event-1")
+        assertThat(received[0].pageCount).isEqualTo(3)
+        assertThat(String(received[0].bytes)).isEqualTo(String(bytes))
+    }
+
+    @Test
+    fun `a file larger than one frame is reassembled from its chunks`() {
+        val wire = Wire()
+        val (initiator, responder) = greetBothSides(wire)
+        // Over the 512 KB chunk, so it crosses several frames and the receiver must stitch them
+        // back by the declared size rather than assuming one frame is the whole file.
+        val bytes = ByteArray(1_300_000) { (it % 251).toByte() }
+        val document = OutgoingDocument("big", "event-1", "application/pdf", 40, bytes)
+
+        val send = async { Transfer.sendDocuments(initiator, listOf(document)) }
+        val got = async { Transfer.receiveDocuments(responder) }
+        send.get(10, TimeUnit.SECONDS)
+
+        val received = got.get(10, TimeUnit.SECONDS)
+        assertThat(received[0].bytes.size).isEqualTo(bytes.size)
+        assertThat(received[0].bytes.toList()).isEqualTo(bytes.toList())
+    }
+
+    @Test
+    fun `an empty manifest is a valid answer and blocks nothing`() {
+        val wire = Wire()
+        val (initiator, responder) = greetBothSides(wire)
+
+        val send = async { Transfer.sendDocuments(initiator, emptyList()) }
+        val got = async { Transfer.receiveDocuments(responder) }
+        send.get(10, TimeUnit.SECONDS)
+
+        assertThat(got.get(10, TimeUnit.SECONDS)).isEmpty()
+    }
+
+    @Test
     fun `the two directions use different keys`() {
         // Both sides start their counter at zero. On one shared key that is immediate nonce reuse,
         // which in GCM is not a weakness but a break.

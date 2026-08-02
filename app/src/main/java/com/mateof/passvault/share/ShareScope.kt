@@ -21,13 +21,26 @@ package com.mateof.passvault.share
  */
 sealed interface ShareScope {
 
-    data object Everything : ShareScope
+    /** The original files to hand over beside the tickets. Empty by default: a file is an extra a
+     *  person opts into, not something a share of two seats drags along unasked. */
+    val documentIds: List<String>
 
-    data class Event(val eventId: String, val eventName: String) : ShareScope
+    data object Everything : ShareScope {
+        // Sharing a whole wallet to your own other phone carries its files too; the picker for a
+        // single event is where a file becomes a deliberate choice.
+        override val documentIds: List<String> get() = emptyList()
+    }
+
+    data class Event(
+        val eventId: String,
+        val eventName: String,
+        override val documentIds: List<String> = emptyList(),
+    ) : ShareScope
 
     data class Tickets(
         val eventId: String,
         val eventName: String,
         val ticketIds: List<String>,
+        override val documentIds: List<String> = emptyList(),
     ) : ShareScope
 }

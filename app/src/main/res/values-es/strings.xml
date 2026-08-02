@@ -368,4 +368,16 @@
     <string name="sharing_revoke_confirm_clean">Esta persona aún no ha descargado el evento, así que quitarle el acceso lo elimina por completo para ella. ¿Continuar?</string>
     <string name="sharing_revoke_confirm_downloaded">Esta persona ya ha descargado el evento en su dispositivo. Quitar el acceso impide que sincronice cambios nuevos, pero no borra lo que ya tiene: eso solo desaparece si ella lo elimina. ¿Continuar?</string>
     <string name="share_nfc_off">El NFC está apagado en este móvil, así que el toque no funcionará. Actívalo en los ajustes, o usa la lista o la dirección.</string>
+    <string name="share_picker_documents">Archivos originales</string>
+    <string name="share_picker_document">%1$d páginas · %2$s</string>
+    <plurals name="share_sent_documents">
+        <item quantity="one">y %1$d archivo original</item>
+        <item quantity="other">y %1$d archivos originales</item>
+    </plurals>
+    <plurals name="share_received_documents">
+        <item quantity="one">y %1$d archivo original</item>
+        <item quantity="other">y %1$d archivos originales</item>
+    </plurals>
+    <string name="sharing_documents_title">Archivos originales</string>
+    <string name="sharing_documents_explain">Si lo activas, el archivo se sube al servidor para quien tenga acceso al evento. Si lo desactivas no se comparte; lo que alguien ya haya descargado sigue siendo suyo.</string>
 </resources>

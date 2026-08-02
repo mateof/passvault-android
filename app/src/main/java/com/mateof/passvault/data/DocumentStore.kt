@@ -51,6 +51,10 @@ interface DocumentDao {
     @Query("SELECT * FROM documents WHERE id = :id")
     suspend fun byId(id: String): DocumentEntity?
 
+    /** Every document, for the "whole wallet" share that carries its files to your other phone. */
+    @Query("SELECT * FROM documents")
+    suspend fun all(): List<DocumentEntity>
+
     @Query("DELETE FROM documents WHERE id = :id")
     suspend fun delete(id: String)
 }

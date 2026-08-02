@@ -368,4 +368,16 @@
     <string name="sharing_revoke_confirm_clean">This person has not downloaded the event yet, so revoking removes it from them entirely. Continue?</string>
     <string name="sharing_revoke_confirm_downloaded">This person has already downloaded the event to their device. Revoking stops them syncing new changes, but does not delete what they already hold — that only goes if they delete it themselves. Continue?</string>
     <string name="share_nfc_off">NFC is off on this phone, so the tap will not work. Turn it on in settings, or use the list or the address.</string>
+    <string name="share_picker_documents">Original files</string>
+    <string name="share_picker_document">%1$d pages · %2$s</string>
+    <plurals name="share_sent_documents">
+        <item quantity="one">and %1$d original file</item>
+        <item quantity="other">and %1$d original files</item>
+    </plurals>
+    <plurals name="share_received_documents">
+        <item quantity="one">and %1$d original file</item>
+        <item quantity="other">and %1$d original files</item>
+    </plurals>
+    <string name="sharing_documents_title">Original files</string>
+    <string name="sharing_documents_explain">Turn it on and the file is uploaded to the server for anyone the event is shared with. Turn it off and it is not shared; whatever someone already downloaded stays theirs.</string>
 </resources>
