@@ -180,7 +180,14 @@
     <string name="server_totp_open">Open in the authenticator app</string>
     <string name="server_totp_code">Code from the app</string>
     <string name="server_totp_confirm">Confirm</string>
-    <string name="server_totp_on">A second factor is on for this account.</string>
+    <plurals name="server_totp_on">
+        <item quantity="one">Second factor on, with %1$d authenticator.</item>
+        <item quantity="other">Second factor on, with %1$d authenticators.</item>
+    </plurals>
+    <string name="server_totp_add_another">Add another authenticator</string>
+    <string name="server_totp_label">Name (for example, Phone or Backup)</string>
+    <string name="server_totp_remove">Remove</string>
+    <string name="server_totp_unnamed">Authenticator</string>
     <string name="server_totp_no_app">No authenticator app is installed. Type the key in by hand.</string>
     <string name="document_zoom_hint">Pinch to zoom, or double tap</string>
     <string name="groups_need_server">Groups live on the server. Connect to one to manage them.</string>

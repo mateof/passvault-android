@@ -52,7 +52,8 @@ fun ServerScreen(
     onPasskeySignIn: () -> Unit,
     onAddPasskey: () -> Unit,
     onEnrolTotp: () -> Unit,
-    onConfirmTotp: (String) -> Unit,
+    onConfirmTotp: (String, String?) -> Unit,
+    onRemoveTotp: (String) -> Unit,
     /** Hands the `otpauth:` link to whichever authenticator is installed. */
     onOpenUri: (String) -> Unit,
     onSignOut: () -> Unit,
@@ -96,6 +97,7 @@ fun ServerScreen(
                     onAddPasskey,
                     onEnrolTotp,
                     onConfirmTotp,
+                    onRemoveTotp,
                     onOpenUri,
                 )
                 // The username and the session list moved to the profile screen, which is where
@@ -198,19 +200,43 @@ private fun SignInStep(
 private fun SecondFactorEnrolment(
     state: ServerUiState,
     onEnrol: () -> Unit,
-    onConfirm: (String) -> Unit,
+    onConfirm: (String, String?) -> Unit,
+    onRemove: (String) -> Unit,
     onOpenUri: (String) -> Unit,
 ) {
     val spacing = LocalSpacing.current
     var code by rememberSaveable { mutableStateOf("") }
+    var label by rememberSaveable { mutableStateOf("") }
 
-    if (state.totpConfirmed) {
+    // What is already on, so the screen is not the write-only "activate" it used to be. A reload
+    // that showed only an offer to turn on two-factor, beside an account that already had it, was
+    // the whole complaint.
+    if (state.totpAuthenticators.isNotEmpty()) {
         Text(
-            text = stringResource(R.string.server_totp_on),
+            text = pluralStringResource(
+                R.plurals.server_totp_on,
+                state.totpAuthenticators.size,
+                state.totpAuthenticators.size,
+            ),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.primary,
         )
-        return
+        for (authenticator in state.totpAuthenticators) {
+            androidx.compose.foundation.layout.Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = authenticator.label
+                        ?: stringResource(R.string.server_totp_unnamed),
+                    modifier = Modifier.weight(1f),
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                TextButton(onClick = { onRemove(authenticator.id) }) {
+                    Text(stringResource(R.string.server_totp_remove))
+                }
+            }
+        }
     }
 
     val enrolment = state.totp
@@ -220,7 +246,13 @@ private fun SecondFactorEnrolment(
             enabled = !state.busy,
             modifier = Modifier.fillMaxWidth(),
         ) {
-            Text(stringResource(R.string.server_totp_add))
+            Text(
+                stringResource(
+                    // "Add another" once one is on, so a phone and a backup both fit.
+                    if (state.totpAuthenticators.isEmpty()) R.string.server_totp_add
+                    else R.string.server_totp_add_another,
+                ),
+            )
         }
         return
     }
@@ -242,6 +274,13 @@ private fun SecondFactorEnrolment(
             style = MaterialTheme.typography.titleMedium,
         )
         OutlinedTextField(
+            value = label,
+            onValueChange = { label = it },
+            label = { Text(stringResource(R.string.server_totp_label)) },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth(),
+        )
+        OutlinedTextField(
             value = code,
             onValueChange = { code = it },
             label = { Text(stringResource(R.string.server_totp_code)) },
@@ -250,7 +289,7 @@ private fun SecondFactorEnrolment(
             modifier = Modifier.fillMaxWidth(),
         )
         Button(
-            onClick = { onConfirm(code) },
+            onClick = { onConfirm(code, label.trim().ifBlank { null }) },
             enabled = !state.busy && code.isNotBlank(),
             modifier = Modifier.fillMaxWidth(),
         ) {
@@ -328,7 +367,8 @@ private fun ReadyStep(
     onOpenAdmin: () -> Unit,
     onAddPasskey: () -> Unit,
     onEnrolTotp: () -> Unit,
-    onConfirmTotp: (String) -> Unit,
+    onConfirmTotp: (String, String?) -> Unit,
+    onRemoveTotp: (String) -> Unit,
     onOpenUri: (String) -> Unit,
 ) {
     Text(state.address, style = MaterialTheme.typography.titleMedium)
@@ -346,7 +386,7 @@ private fun ReadyStep(
         Text(stringResource(R.string.server_passkey_add))
     }
 
-    SecondFactorEnrolment(state, onEnrolTotp, onConfirmTotp, onOpenUri)
+    SecondFactorEnrolment(state, onEnrolTotp, onConfirmTotp, onRemoveTotp, onOpenUri)
     if (state.passkeyAdded) {
         Text(
             text = stringResource(R.string.server_passkey_added),

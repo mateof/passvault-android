@@ -65,12 +65,18 @@ class ServerApi(private val settings: ServerSettings) {
     @Volatile
     private var token: String? = settings.sessionToken()
 
-    val isSignedIn: Boolean get() = token != null
+    /** The long-lived half, which mints a new access token when the short one expires. */
+    @Volatile
+    private var refreshToken: String? = settings.refreshToken()
 
-    /** Forgets it here and on disk. What "sign out" means and the only thing that ends it. */
+    val isSignedIn: Boolean get() = token != null || refreshToken != null
+
+    /** Forgets both here and on disk. What "sign out" means and the only thing that ends it. */
     fun signOutLocally() {
         token = null
+        refreshToken = null
         settings.setSessionToken(null)
+        settings.setRefreshToken(null)
     }
 
     private fun url(path: String): String {
@@ -82,7 +88,7 @@ class ServerApi(private val settings: ServerSettings) {
         path: String,
         body: JsonObject? = null,
         method: String = if (body == null) "GET" else "POST",
-    ): JsonObject = callOnce(path, body, method, retryOnLockedVault = true)
+    ): JsonObject = callOnce(path, body, method, retryOnLockedVault = true, retryOnExpiredAccess = true)
 
     /**
      * One request, with one self-service retry for a vault the server forgot.
@@ -98,6 +104,7 @@ class ServerApi(private val settings: ServerSettings) {
         body: JsonObject? = null,
         method: String = if (body == null) "GET" else "POST",
         retryOnLockedVault: Boolean = false,
+        retryOnExpiredAccess: Boolean = false,
     ): JsonObject {
         val request = Request.Builder()
             .url(url(path))
@@ -123,6 +130,19 @@ class ServerApi(private val settings: ServerSettings) {
             val parsed = runCatching { Json.parseToJsonElement(text).jsonObject }.getOrNull()
             if (!response.isSuccessful) {
                 val code = parsed?.text("code") ?: parsed?.text("error")
+                // The access token may simply have aged out. Refresh once and retry before letting
+                // a 401 read as a sign-out — the short access token's expiry is meant to be a pause.
+                if (retryOnExpiredAccess && response.code == 401 && refreshToken != null) {
+                    if (refreshAccess()) {
+                        return callOnce(
+                            path,
+                            body,
+                            method,
+                            retryOnLockedVault = retryOnLockedVault,
+                            retryOnExpiredAccess = false,
+                        )
+                    }
+                }
                 if (
                     retryOnLockedVault &&
                     response.code == 423 &&
@@ -192,8 +212,7 @@ class ServerApi(private val settings: ServerSettings) {
 
     private fun outcomeOf(result: JsonObject): SignInOutcome {
         if (result.text("status") == "complete") {
-            token = result.text("token")
-            settings.setSessionToken(token)
+            storeTokens(result)
             return SignInOutcome.SignedIn(result.text("userId").orEmpty())
         }
         return SignInOutcome.SecondFactorNeeded(
@@ -205,8 +224,47 @@ class ServerApi(private val settings: ServerSettings) {
 
     fun signOut() {
         runCatching { call("/api/v1/auth/logout", buildJsonObject { }) }
-        token = null
-        settings.setSessionToken(null)
+        signOutLocally()
+    }
+
+    /** Keeps both tokens from a login or a refresh, in memory and sealed on disk. */
+    private fun storeTokens(result: JsonObject) {
+        token = result.text("token")
+        settings.setSessionToken(token)
+        result.text("refreshToken")?.let {
+            refreshToken = it
+            settings.setRefreshToken(it)
+        }
+    }
+
+    /**
+     * Trades the refresh token for a fresh pair, once at a time.
+     *
+     * Its own request builder rather than [call], because [call] retries a 401 by refreshing —
+     * and a refresh that itself 401s must fail, not recurse. The old refresh token is spent by the
+     * server the moment this succeeds, which is why the new one it returns is kept immediately.
+     */
+    @Synchronized
+    private fun refreshAccess(): Boolean {
+        val current = refreshToken ?: return false
+        val request = Request.Builder()
+            .url(url("/api/v1/auth/refresh"))
+            .header("Accept-Language", settings.locale())
+            .post(buildJsonObject { put("refreshToken", current) }.toString().toRequestBody(jsonType))
+            .build()
+        return runCatching {
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) {
+                    // A refresh token the server will not honour is a session that has ended.
+                    // Forget it so the next call surfaces a sign-in rather than looping.
+                    if (response.code == 401) signOutLocally()
+                    return false
+                }
+                val parsed = Json.parseToJsonElement(response.body?.string().orEmpty()).jsonObject
+                storeTokens(parsed)
+                true
+            }
+        }.getOrDefault(false)
     }
 
     /** Where the web administration lives, for a phone that wants to open it. */
@@ -763,8 +821,30 @@ class ServerApi(private val settings: ServerSettings) {
         )
     }
 
-    fun totpConfirm(code: String) {
-        call("/api/v1/totp/confirm", buildJsonObject { put("code", code) })
+    fun totpConfirm(code: String, label: String? = null) {
+        call(
+            "/api/v1/totp/confirm",
+            buildJsonObject {
+                put("code", code)
+                if (!label.isNullOrBlank()) put("label", label)
+            },
+        )
+    }
+
+    /** The authenticators already enrolled, so the screen shows what is on rather than only offers. */
+    fun totpAuthenticators(): List<TotpAuthenticator> =
+        (call("/api/v1/totp")["authenticators"] as? JsonArray).orEmpty()
+            .map { it.jsonObject }
+            .map {
+                TotpAuthenticator(
+                    id = it.text("id").orEmpty(),
+                    label = it.text("label"),
+                    createdAt = it.text("createdAt").orEmpty(),
+                )
+            }
+
+    fun totpRemove(id: String) {
+        call("/api/v1/totp/$id", method = "DELETE")
     }
 
     fun passkeyRegisterOptions(): String =
@@ -819,6 +899,9 @@ data class AccessEntry(
 
 /** What an authenticator needs, in the two forms one might be given it. */
 data class TotpEnrolment(val secret: String, val uri: String)
+
+/** One enrolled authenticator app, as the profile lists it. */
+data class TotpAuthenticator(val id: String, val label: String?, val createdAt: String)
 
 /** A word somebody chose for their own events, and the colour it is drawn in. */
 data class Tag(val id: String, val name: String, val colour: String, val eventCount: Int)

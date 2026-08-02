@@ -1142,6 +1142,9 @@ private fun ServerPane(
         // sessions change when somebody signs in, which is not often enough to hold a request
         // open for.
         viewModel.loadSessions()
+        // And the authenticators, so a returning user sees "you already have two-factor" rather
+        // than an offer to turn on what is already on.
+        viewModel.loadTotp()
     }
 
     Scaffold(
@@ -1171,7 +1174,8 @@ private fun ServerPane(
             onPasskeySignIn = { viewModel.signInWithPasskey(passkeys) },
             onAddPasskey = { viewModel.addPasskey(passkeys, android.os.Build.MODEL ?: "Android") },
             onEnrolTotp = viewModel::enrolTotp,
-            onConfirmTotp = viewModel::confirmTotp,
+            onConfirmTotp = { code, label -> viewModel.confirmTotp(code, label) },
+            onRemoveTotp = viewModel::removeTotp,
             onSignOut = viewModel::signOut,
             // Fired, not asked about first. `resolveActivity` needs a `<queries>` declaration
             // since Android 11 and returns null without one even when three browsers are

@@ -161,6 +161,9 @@ class ServerViewModel @Inject constructor(
                     // this the admin door only appeared after leaving the screen and returning,
                     // because arrival had asked while nobody was signed in yet.
                     loadSessions()
+                    // And which authenticators are already on, so the second-factor card shows
+                    // them rather than always offering to turn one on.
+                    loadTotp()
                     _state.value.copy(busy = false, stage = ServerStage.Ready)
                 },
                 onFailure = { _state.value.copy(busy = false, failure = describe(it)) },
@@ -264,14 +267,37 @@ class ServerViewModel @Inject constructor(
         }
     }
 
-    /** Arms it. Nothing is in force until a code the authenticator produced comes back correct. */
-    fun confirmTotp(code: String) {
+    /** The authenticators already enrolled, so the screen shows what is on rather than only offers. */
+    fun loadTotp() {
+        if (!api.isSignedIn) return
+        viewModelScope.launch {
+            val loaded = withContext(Dispatchers.IO) { runCatching { api.totpAuthenticators() } }
+            loaded.onSuccess { _state.value = _state.value.copy(totpAuthenticators = it) }
+        }
+    }
+
+    /** Arms one. Nothing is in force until a code the authenticator produced comes back correct. */
+    fun confirmTotp(code: String, label: String? = null) {
         viewModelScope.launch {
             _state.value = _state.value.copy(busy = true, failure = null)
-            val done = withContext(Dispatchers.IO) { runCatching { api.totpConfirm(code) } }
+            val done = withContext(Dispatchers.IO) { runCatching { api.totpConfirm(code, label) } }
             _state.value = done.fold(
-                onSuccess = { _state.value.copy(busy = false, totp = null, totpConfirmed = true) },
+                onSuccess = {
+                    loadTotp()
+                    _state.value.copy(busy = false, totp = null, totpConfirmed = true)
+                },
                 onFailure = { _state.value.copy(busy = false, failure = describe(it)) },
+            )
+        }
+    }
+
+    /** Removes one authenticator. The account keeps its password, so this needs no ceremony. */
+    fun removeTotp(id: String) {
+        viewModelScope.launch {
+            val done = withContext(Dispatchers.IO) { runCatching { api.totpRemove(id) } }
+            done.fold(
+                onSuccess = { loadTotp() },
+                onFailure = { _state.value = _state.value.copy(failure = describe(it)) },
             )
         }
     }
@@ -532,4 +558,6 @@ data class ServerUiState(
     /** Present while an enrolment is waiting for its first code. */
     val totp: com.mateof.passvault.server.TotpEnrolment? = null,
     val totpConfirmed: Boolean = false,
+    /** The authenticators already enrolled, so the screen can say "you already have one". */
+    val totpAuthenticators: List<com.mateof.passvault.server.TotpAuthenticator> = emptyList(),
 )

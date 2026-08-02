@@ -43,7 +43,12 @@ class ServerSettings(
     }
 
     fun clear() {
-        preferences.edit().remove(BASE_URL).remove(SESSION_TOKEN).remove(VAULT_PASSPHRASE).apply()
+        preferences.edit()
+            .remove(BASE_URL)
+            .remove(SESSION_TOKEN)
+            .remove(REFRESH_TOKEN)
+            .remove(VAULT_PASSPHRASE)
+            .apply()
     }
 
     /**
@@ -106,6 +111,25 @@ class ServerSettings(
     }
 
     /**
+     * The refresh token, sealed like the access token beside it.
+     *
+     * The long-lived half of the pair: the access token it renews is short, so this is what
+     * actually keeps the phone signed in for as long as the session lasts. Sealed under the same
+     * KeyStore key as everything else, and dropped on sign-out with the rest.
+     */
+    fun refreshToken(): String? {
+        val sealed = preferences.getString(REFRESH_TOKEN, null) ?: return null
+        return keys?.open(sealed)
+    }
+
+    fun setRefreshToken(token: String?) {
+        preferences.edit().apply {
+            if (token == null || keys == null) remove(REFRESH_TOKEN)
+            else putString(REFRESH_TOKEN, keys.seal(token))
+        }.apply()
+    }
+
+    /**
      * The password to publish an event under, chosen before it has ever been uploaded.
      *
      * A password decides who can decrypt an event, and it can only be set as the event is created
@@ -157,6 +181,7 @@ class ServerSettings(
     private companion object {
         const val BASE_URL = "base_url"
         const val SESSION_TOKEN = "session_token"
+        const val REFRESH_TOKEN = "refresh_token"
         const val VAULT_PASSPHRASE = "vault_passphrase"
         const val UI_LOCALE = "ui_locale"
         const val EVENT_PASSWORD = "event_password:"

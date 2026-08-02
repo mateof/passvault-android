@@ -186,7 +186,14 @@
     <string name="server_totp_open">Abrir na aplicación de códigos</string>
     <string name="server_totp_code">Código da aplicación</string>
     <string name="server_totp_confirm">Confirmar</string>
-    <string name="server_totp_on">O segundo factor está activo nesta conta.</string>
+    <plurals name="server_totp_on">
+        <item quantity="one">Segundo factor activo con %1$d authenticator.</item>
+        <item quantity="other">Segundo factor activo con %1$d authenticators.</item>
+    </plurals>
+    <string name="server_totp_add_another">Engadir outro authenticator</string>
+    <string name="server_totp_label">Nome (por exemplo, Móbil ou Copia)</string>
+    <string name="server_totp_remove">Quitar</string>
+    <string name="server_totp_unnamed">Authenticator</string>
     <string name="server_totp_no_app">Non hai ningunha aplicación de códigos instalada. Escribe a clave a man.</string>
     <string name="document_zoom_hint">Pincha para achegar, ou toca dúas veces</string>
     <string name="groups_need_server">Os grupos viven no servidor. Conéctate a un para xestionalos.</string>
