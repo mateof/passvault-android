@@ -780,6 +780,7 @@ class ServerApi(private val settings: ServerSettings) {
     fun ticketStatuses(eventId: String): TicketStatuses {
         val result = call("/api/v1/events/$eventId/tickets")
         val tickets = (result["tickets"] as? JsonArray).orEmpty().map { it.jsonObject }.map {
+            val payment = it["payment"]?.jsonObject
             TicketStatus(
                 id = it.text("id").orEmpty(),
                 hasBarcode = it["barcode"]?.let { b -> b.jsonObject.isNotEmpty() } == true,
@@ -791,6 +792,11 @@ class ServerApi(private val settings: ServerSettings) {
                 sharePermitted = it["sharePermitted"]?.jsonPrimitive?.content == "true",
                 holderUserId = it.text("holderUserId"),
                 assignmentState = it.text("assignmentState").orEmpty(),
+                // Present only for a viewer the creator lets see it: its absence is "not visible".
+                paymentState = payment?.text("state"),
+                paymentVisibility = payment?.text("visibility"),
+                amountCents = payment?.get("amountCents")?.jsonPrimitive?.content?.toIntOrNull(),
+                currency = payment?.text("currency"),
             )
         }
         return TicketStatuses(tickets = tickets, serverTime = result.text("serverTime").orEmpty())
@@ -827,6 +833,31 @@ class ServerApi(private val settings: ServerSettings) {
     /** Hands a seat back, while the barcode is still locked to its holder. */
     fun returnTicket(ticketId: String) {
         call("/api/v1/tickets/$ticketId/return", buildJsonObject { })
+    }
+
+    /**
+     * Records who has paid and who has not, and who may see it.
+     *
+     * Visibility is the creator's to choose: everybody (ALL), only the person who owes it
+     * (HOLDER_ONLY), or nobody but the creator (CREATOR_ONLY). Unpaid also holds the barcode
+     * back, so marking a seat paid is what lets its code through.
+     */
+    fun setPayment(
+        ticketId: String,
+        state: String,
+        visibility: String,
+        amountCents: Int?,
+        currency: String?,
+    ) {
+        call(
+            "/api/v1/tickets/$ticketId/payment",
+            buildJsonObject {
+                put("state", state)
+                put("visibility", visibility)
+                if (amountCents != null) put("amountCents", amountCents)
+                if (!currency.isNullOrBlank()) put("currency", currency)
+            },
+        )
     }
 
     /**
@@ -974,6 +1005,11 @@ data class TicketStatus(
     val sharePermitted: Boolean,
     val holderUserId: String?,
     val assignmentState: String,
+    /** Present only for a viewer the creator lets see it; null means "not visible to me". */
+    val paymentState: String? = null,
+    val paymentVisibility: String? = null,
+    val amountCents: Int? = null,
+    val currency: String? = null,
 )
 
 data class TicketStatuses(val tickets: List<TicketStatus>, val serverTime: String)

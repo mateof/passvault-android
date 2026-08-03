@@ -383,6 +383,7 @@
     <string name="ticket_locked_unpaid">The code cannot be seen yet: it is unpaid. It appears once the organiser marks it paid.</string>
     <string name="ticket_locked_blocked">The organiser has the code blocked for now.</string>
     <string name="ticket_locked_until">The code becomes visible from %1$s.</string>
+    <string name="ticket_locked_countdown">The code becomes visible in %1$s.</string>
     <string name="ticket_return">Return the ticket</string>
     <string name="ticket_returned_notice">Ticket returned.</string>
     <string name="ticket_return_failed">The ticket could not be returned.</string>
@@ -395,4 +396,15 @@
     <string name="ticket_visible_day_before">Open the day before the event</string>
     <string name="ticket_visibility_clear">No time limit</string>
     <string name="ticket_allow_share">Let the holder share it</string>
+    <string name="payment_title">Payment</string>
+    <string name="payment_paid">Paid</string>
+    <string name="payment_partial">Part-paid</string>
+    <string name="payment_waived">Waived</string>
+    <string name="payment_unpaid">Unpaid</string>
+    <string name="payment_mark_paid">Mark as paid</string>
+    <string name="payment_mark_unpaid">Mark as unpaid</string>
+    <string name="payment_visibility_label">Who can see it</string>
+    <string name="payment_visibility_all">All members</string>
+    <string name="payment_visibility_holder">Only the holder</string>
+    <string name="payment_visibility_creator">Only you</string>
 </resources>

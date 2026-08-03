@@ -497,6 +497,10 @@ class WalletViewModel @Inject constructor(
                 revealed = mine.revealed,
                 sharePermitted = mine.sharePermitted,
                 visibleFrom = mine.visibleFrom,
+                paymentState = mine.paymentState,
+                paymentVisibility = mine.paymentVisibility,
+                amountCents = mine.amountCents,
+                currency = mine.currency,
             )
         }
         return detail.copy(
@@ -507,6 +511,10 @@ class WalletViewModel @Inject constructor(
             lockReason = mine.lockReason,
             visibleFrom = mine.visibleFrom,
             canReturn = !mine.revealed && mine.assignmentState != "FREE" && mine.holderUserId != null,
+            // Only what the creator lets this viewer see, which the server already decided.
+            paymentState = mine.paymentState,
+            amountCents = mine.amountCents,
+            currency = mine.currency,
         )
     }
 

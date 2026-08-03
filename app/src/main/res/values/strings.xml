@@ -389,6 +389,7 @@
     <string name="ticket_locked_unpaid">O código aínda non se pode ver: falta o pagamento. Aparecerá cando o organizador o marque como pagado.</string>
     <string name="ticket_locked_blocked">O organizador ten o código bloqueado polo momento.</string>
     <string name="ticket_locked_until">O código verase a partir de %1$s.</string>
+    <string name="ticket_locked_countdown">O código verase dentro de %1$s.</string>
     <string name="ticket_return">Devolver a entrada</string>
     <string name="ticket_returned_notice">Entrada devolta.</string>
     <string name="ticket_return_failed">Non se puido devolver a entrada.</string>
@@ -401,4 +402,15 @@
     <string name="ticket_visible_day_before">Abrir o día antes do evento</string>
     <string name="ticket_visibility_clear">Sen límite de tempo</string>
     <string name="ticket_allow_share">Permitir que quen a teña a comparta</string>
+    <string name="payment_title">Pagamento</string>
+    <string name="payment_paid">Pagada</string>
+    <string name="payment_partial">Pago parcial</string>
+    <string name="payment_waived">Perdoada</string>
+    <string name="payment_unpaid">Sen pagar</string>
+    <string name="payment_mark_paid">Marcar como pagada</string>
+    <string name="payment_mark_unpaid">Marcar como sen pagar</string>
+    <string name="payment_visibility_label">Quen pode velo</string>
+    <string name="payment_visibility_all">Todos os membros</string>
+    <string name="payment_visibility_holder">Só quen a ten</string>
+    <string name="payment_visibility_creator">Só ti</string>
 </resources>

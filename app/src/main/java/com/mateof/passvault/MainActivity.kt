@@ -554,6 +554,11 @@ private fun PassVaultApp(
                             }
                         }
                     },
+                    onSetPayment = { shown, state, visibility ->
+                        viewModel.ticketControl { api ->
+                            api.setPayment(shown, state, visibility, null, null)
+                        }
+                    },
                 )
                 Screen.Notices -> NoticesPane(onMenu = openDrawer)
                 Screen.Groups -> GroupsPane(onMenu = openDrawer)

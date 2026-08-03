@@ -48,6 +48,8 @@ fun TicketPager(
     /** A creator control on the ticket. Suspends until the server answers, so the page reloads
      *  onto the new state rather than showing a stale one. */
     onControl: suspend (String, TicketControl) -> Unit = { _, _ -> },
+    /** Records who has paid and who may see it: (ticketId, state, visibility). */
+    onSetPayment: suspend (String, String, String) -> Unit = { _, _, _ -> },
     modifier: Modifier = Modifier,
 ) {
     val pager = rememberPagerState(
@@ -120,6 +122,7 @@ fun TicketPager(
                 onOpenDocument = { onOpenDocument(shown) },
                 onReturn = { onReturn(shown) },
                 onControl = { control -> onControl(shown, control) },
+                onSetPayment = { state, visibility -> onSetPayment(shown, state, visibility) },
             )
         }
     }
@@ -142,6 +145,7 @@ private fun TicketPage(
     onOpenDocument: () -> Unit,
     onReturn: () -> Unit,
     onControl: suspend (TicketControl) -> Unit,
+    onSetPayment: suspend (String, String) -> Unit,
 ) {
     var detail by remember(ticketId) { mutableStateOf<TicketDetail?>(null) }
     // Bumped after a control acts, so the page reloads onto the state the server now reports.
@@ -167,6 +171,12 @@ private fun TicketPage(
             },
             onVisibleDayBefore = { act(TicketControl.VisibleDayBefore) },
             onClearVisibility = { act(TicketControl.ClearVisibility) },
+            onSetPayment = { state, visibility ->
+                scope.launch {
+                    onSetPayment(state, visibility)
+                    reload += 1
+                }
+            },
         )
     }
 }
