@@ -3,6 +3,7 @@ package com.mateof.passvault.ui.ticket
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -38,12 +39,32 @@ data class TicketDetail(
     val isProvisional: Boolean,
     /** Whether the document this was split out of was kept. */
     val hasDocument: Boolean = false,
+    /** The creator has not opened this code yet, so it is withheld even though the phone holds it. */
+    val locked: Boolean = false,
+    /** Why: 'blocked', 'unpaid', or 'notYet'. Null when it is not locked. */
+    val lockReason: String? = null,
+    /** The moment it opens, for a countdown measured against the server's clock. */
+    val visibleFrom: String? = null,
+    /** Whether the holder may still hand it back — only while the code is still locked to them. */
+    val canReturn: Boolean = false,
+    /** Whether this device created the event, and so may work the controls below. */
+    val isCreator: Boolean = false,
+    /** Creator's view: whether the code is held back, may still be, and may be passed on. */
+    val blocked: Boolean = false,
+    val revealed: Boolean = false,
+    val sharePermitted: Boolean = false,
 )
 
 @Composable
 fun TicketDetailScreen(
     detail: TicketDetail,
     onOpenDocument: () -> Unit,
+    onReturn: () -> Unit = {},
+    onBlock: () -> Unit = {},
+    onUnblock: () -> Unit = {},
+    onToggleShare: (Boolean) -> Unit = {},
+    onVisibleDayBefore: () -> Unit = {},
+    onClearVisibility: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val spacing = LocalSpacing.current
@@ -58,6 +79,29 @@ fun TicketDetailScreen(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(spacing.medium),
     ) {
+        if (detail.locked) {
+            // The code the phone holds but must not show yet, in the words the holder can act on.
+            Text(
+                text = stringResource(
+                    when (detail.lockReason) {
+                        "unpaid" -> R.string.ticket_locked_unpaid
+                        "blocked" -> R.string.ticket_locked_blocked
+                        else -> R.string.ticket_locked_until
+                    },
+                    detail.visibleFrom?.let { whenText(it) } ?: "",
+                ),
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.secondary,
+                textAlign = TextAlign.Center,
+            )
+            if (detail.canReturn) {
+                // The way out while there is still nothing to keep: a locked ticket can be handed
+                // back, and once the code has been seen it cannot.
+                TextButton(onClick = onReturn) {
+                    Text(stringResource(R.string.ticket_return))
+                }
+            }
+        }
         if (detail.barcodeValue != null) {
             // The image needs a symbology; the payload does not. A ticket that arrived without a
             // declared format used to render nothing at all — no image and no text — so a perfectly
@@ -123,5 +167,106 @@ fun TicketDetailScreen(
                 textAlign = TextAlign.Center,
             )
         }
+
+        if (detail.isCreator) {
+            CreatorControls(
+                detail = detail,
+                onBlock = onBlock,
+                onUnblock = onUnblock,
+                onToggleShare = onToggleShare,
+                onVisibleDayBefore = onVisibleDayBefore,
+                onClearVisibility = onClearVisibility,
+            )
+        }
     }
+}
+
+/**
+ * The creator's grip on this one barcode, under it.
+ *
+ * The block button turns itself off the moment the code has been served, because from there the
+ * holder may have a photograph and a block would be a lie the interface must not tell. The rest —
+ * open the day before, clear the gate, lend the ticket on — is small on purpose: the fine control
+ * lives on the web, and this is what somebody adjusts with the phone already in their hand.
+ */
+@Composable
+private fun CreatorControls(
+    detail: TicketDetail,
+    onBlock: () -> Unit,
+    onUnblock: () -> Unit,
+    onToggleShare: (Boolean) -> Unit,
+    onVisibleDayBefore: () -> Unit,
+    onClearVisibility: () -> Unit,
+) {
+    val spacing = LocalSpacing.current
+    androidx.compose.material3.HorizontalDivider(
+        modifier = Modifier.padding(vertical = spacing.small),
+    )
+    Text(
+        text = stringResource(R.string.ticket_controls_title),
+        style = MaterialTheme.typography.titleSmall,
+    )
+    detail.visibleFrom?.let {
+        Text(
+            text = stringResource(R.string.ticket_visible_from, whenText(it)),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+
+    if (detail.blocked) {
+        androidx.compose.material3.OutlinedButton(
+            onClick = onUnblock,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text(stringResource(R.string.ticket_unblock))
+        }
+    } else {
+        androidx.compose.material3.OutlinedButton(
+            onClick = onBlock,
+            enabled = !detail.revealed,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text(
+                stringResource(
+                    if (detail.revealed) R.string.ticket_block_revealed else R.string.ticket_block,
+                ),
+            )
+        }
+    }
+
+    androidx.compose.material3.OutlinedButton(
+        onClick = onVisibleDayBefore,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Text(stringResource(R.string.ticket_visible_day_before))
+    }
+    androidx.compose.material3.OutlinedButton(
+        onClick = onClearVisibility,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Text(stringResource(R.string.ticket_visibility_clear))
+    }
+
+    androidx.compose.foundation.layout.Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        androidx.compose.material3.Switch(
+            checked = detail.sharePermitted,
+            onCheckedChange = onToggleShare,
+        )
+        Text(
+            text = stringResource(R.string.ticket_allow_share),
+            modifier = Modifier.padding(start = spacing.small),
+            style = MaterialTheme.typography.bodyMedium,
+        )
+    }
+}
+
+/** A server instant as a local day and time, so "visible from" reads as a moment. */
+private fun whenText(value: String): String {
+    val instant = runCatching { java.time.Instant.parse(value) }.getOrNull() ?: return value
+    return java.time.LocalDateTime.ofInstant(instant, java.time.ZoneId.systemDefault())
+        .format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"))
 }

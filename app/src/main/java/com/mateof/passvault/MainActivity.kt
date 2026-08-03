@@ -532,6 +532,28 @@ private fun PassVaultApp(
                             screen = Screen.Document(openEvent?.first.orEmpty())
                         }
                     },
+                    onReturn = { shown ->
+                        // Back to the event once given up: the seat is no longer theirs to look at.
+                        viewModel.returnTicket(shown, onDone = backToEvent)
+                    },
+                    onControl = { shown, control ->
+                        viewModel.ticketControl { api ->
+                            when (control) {
+                                com.mateof.passvault.ui.ticket.TicketControl.Block ->
+                                    api.blockTicket(shown)
+                                com.mateof.passvault.ui.ticket.TicketControl.Unblock ->
+                                    api.unblockTicket(shown)
+                                com.mateof.passvault.ui.ticket.TicketControl.ToggleShareOn ->
+                                    api.setSharePermission(shown, true)
+                                com.mateof.passvault.ui.ticket.TicketControl.ToggleShareOff ->
+                                    api.setSharePermission(shown, false)
+                                com.mateof.passvault.ui.ticket.TicketControl.VisibleDayBefore ->
+                                    api.setTicketVisibility(shown, visibleFrom = null, hoursBeforeEvent = 24)
+                                com.mateof.passvault.ui.ticket.TicketControl.ClearVisibility ->
+                                    api.setTicketVisibility(shown, visibleFrom = null, hoursBeforeEvent = null)
+                            }
+                        }
+                    },
                 )
                 Screen.Notices -> NoticesPane(onMenu = openDrawer)
                 Screen.Groups -> GroupsPane(onMenu = openDrawer)
@@ -546,6 +568,7 @@ private fun PassVaultApp(
                     tickets = eventTickets,
                     documents = eventDocuments,
                     onLoadEvent = { id -> viewModel.openEvent(id) },
+                    loadPolicy = { id -> viewModel.sharePolicy(id) },
                     onBack = { screen = Screen.ShareChooser },
                     onChosen = { chosen -> screen = Screen.ShareSend(chosen) },
                 )
@@ -1456,12 +1479,21 @@ private fun SharePickerPane(
     tickets: List<com.mateof.passvault.ui.wallet.TicketRow>,
     documents: List<com.mateof.passvault.ui.wallet.DocumentRow>,
     onLoadEvent: (String?) -> Unit,
+    loadPolicy: suspend (String) -> com.mateof.passvault.ui.wallet.SharePolicy,
     onBack: () -> Unit,
     onChosen: (ShareScope) -> Unit,
 ) {
     // Null while picking an event; an event while picking its tickets.
     var narrowing by remember { mutableStateOf<com.mateof.passvault.ui.wallet.EventRow?>(null) }
     var picked by remember { mutableStateOf(setOf<String>()) }
+    // What the creator lets this phone hand on: everything for its own events, only the lent seats
+    // for one shared to it. Null while it is still being worked out, which keeps the buttons off.
+    var policy by remember {
+        mutableStateOf<com.mateof.passvault.ui.wallet.SharePolicy?>(null)
+    }
+    LaunchedEffect(narrowing?.id) {
+        policy = narrowing?.let { loadPolicy(it.id) }
+    }
     // The original files ticked to travel with the event. None by default: a file is an extra a
     // person opts into, not something a share drags along unasked.
     var pickedDocs by remember { mutableStateOf(setOf<String>()) }
@@ -1542,31 +1574,49 @@ private fun SharePickerPane(
                     }
                 }
             } else {
-                // Inside one event: hand over all of it, or tick the seats that travel.
-                item {
-                    androidx.compose.material3.Card(
-                        onClick = {
-                            onChosen(
-                                ShareScope.Event(
-                                    chosenEvent.id,
+                val currentPolicy = policy
+                // Only an event's creator hands the whole thing on. A member sees this card gone
+                // and can pick, at most, the individual seats they were lent.
+                if (currentPolicy?.canShareWholeEvent == true) {
+                    // Inside one event: hand over all of it, or tick the seats that travel.
+                    item {
+                        androidx.compose.material3.Card(
+                            onClick = {
+                                onChosen(
+                                    ShareScope.Event(
+                                        chosenEvent.id,
+                                        chosenEvent.name,
+                                        pickedDocs.toList(),
+                                    ),
+                                )
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text(
+                                text = stringResource(
+                                    R.string.share_picker_whole_event,
                                     chosenEvent.name,
-                                    pickedDocs.toList(),
                                 ),
+                                style = androidx.compose.material3.MaterialTheme.typography.titleMedium,
+                                modifier = Modifier.padding(16.dp),
                             )
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
+                        }
+                    }
+                } else if (currentPolicy != null && currentPolicy.permittedTicketIds?.isEmpty() == true) {
+                    // Nothing here is theirs to share, and saying so beats a screen of disabled rows.
+                    item {
                         Text(
-                            text = stringResource(R.string.share_picker_whole_event, chosenEvent.name),
-                            style = androidx.compose.material3.MaterialTheme.typography.titleMedium,
-                            modifier = Modifier.padding(16.dp),
+                            text = stringResource(R.string.share_picker_not_allowed),
+                            style = androidx.compose.material3.MaterialTheme.typography.bodyMedium,
+                            color = androidx.compose.material3.MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(vertical = 8.dp),
                         )
                     }
                 }
 
-                // The original files, ticked to travel or left behind. Shown only when there are
-                // any: an event built from a plain photo has none, and an empty heading is noise.
-                if (documents.isNotEmpty()) {
+                // The original files, ticked to travel or left behind. Only when this phone may
+                // hand on the whole event — the files belong to it, not to a single lent seat.
+                if (documents.isNotEmpty() && currentPolicy?.canShareWholeEvent == true) {
                     item {
                         Text(
                             text = stringResource(R.string.share_picker_documents),
@@ -1601,7 +1651,14 @@ private fun SharePickerPane(
                     }
                 }
 
-                items(items = tickets, key = { row -> row.id }) { ticket ->
+                // Only the seats this phone may hand on: all of them for its own event, the lent
+                // ones for a shared event, and none until the policy is known.
+                val shareableTickets = when {
+                    currentPolicy == null -> emptyList()
+                    currentPolicy.canShareWholeEvent -> tickets
+                    else -> tickets.filter { currentPolicy.permittedTicketIds?.contains(it.id) == true }
+                }
+                items(items = shareableTickets, key = { row -> row.id }) { ticket ->
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,

@@ -23,6 +23,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.mateof.passvault.R
 import com.mateof.passvault.ui.wallet.TicketRow
+import kotlinx.coroutines.launch
 
 /**
  * A ticket, with the rest of the event's tickets either side of it.
@@ -43,6 +44,10 @@ fun TicketPager(
     load: suspend (String) -> TicketDetail?,
     onBack: () -> Unit,
     onOpenDocument: (String) -> Unit,
+    onReturn: (String) -> Unit = {},
+    /** A creator control on the ticket. Suspends until the server answers, so the page reloads
+     *  onto the new state rather than showing a stale one. */
+    onControl: suspend (String, TicketControl) -> Unit = { _, _ -> },
     modifier: Modifier = Modifier,
 ) {
     val pager = rememberPagerState(
@@ -113,10 +118,15 @@ fun TicketPager(
                 ticketId = shown,
                 load = load,
                 onOpenDocument = { onOpenDocument(shown) },
+                onReturn = { onReturn(shown) },
+                onControl = { control -> onControl(shown, control) },
             )
         }
     }
 }
+
+/** The creator's controls, as one closed set the pager can hand to the server. */
+enum class TicketControl { Block, Unblock, ToggleShareOn, ToggleShareOff, VisibleDayBefore, ClearVisibility }
 
 /**
  * One ticket inside the pager, which loads itself.
@@ -130,9 +140,33 @@ private fun TicketPage(
     ticketId: String,
     load: suspend (String) -> TicketDetail?,
     onOpenDocument: () -> Unit,
+    onReturn: () -> Unit,
+    onControl: suspend (TicketControl) -> Unit,
 ) {
     var detail by remember(ticketId) { mutableStateOf<TicketDetail?>(null) }
-    LaunchedEffect(ticketId) { detail = load(ticketId) }
+    // Bumped after a control acts, so the page reloads onto the state the server now reports.
+    var reload by remember(ticketId) { mutableStateOf(0) }
+    LaunchedEffect(ticketId, reload) { detail = load(ticketId) }
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    val act: (TicketControl) -> Unit = { control ->
+        scope.launch {
+            onControl(control)
+            reload += 1
+        }
+    }
 
-    detail?.let { TicketDetailScreen(it, onOpenDocument) }
+    detail?.let {
+        TicketDetailScreen(
+            detail = it,
+            onOpenDocument = onOpenDocument,
+            onReturn = onReturn,
+            onBlock = { act(TicketControl.Block) },
+            onUnblock = { act(TicketControl.Unblock) },
+            onToggleShare = { on ->
+                act(if (on) TicketControl.ToggleShareOn else TicketControl.ToggleShareOff)
+            },
+            onVisibleDayBefore = { act(TicketControl.VisibleDayBefore) },
+            onClearVisibility = { act(TicketControl.ClearVisibility) },
+        )
+    }
 }

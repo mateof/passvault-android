@@ -386,4 +386,19 @@
     </plurals>
     <string name="sharing_documents_title">Ficheiros orixinais</string>
     <string name="sharing_documents_explain">Se o activas, o ficheiro súbese ao servidor para quen teña acceso ao evento. Se o desactivas non se comparte; o que alguén xa descargase segue sendo seu.</string>
+    <string name="ticket_locked_unpaid">O código aínda non se pode ver: falta o pagamento. Aparecerá cando o organizador o marque como pagado.</string>
+    <string name="ticket_locked_blocked">O organizador ten o código bloqueado polo momento.</string>
+    <string name="ticket_locked_until">O código verase a partir de %1$s.</string>
+    <string name="ticket_return">Devolver a entrada</string>
+    <string name="ticket_returned_notice">Entrada devolta.</string>
+    <string name="ticket_return_failed">Non se puido devolver a entrada.</string>
+    <string name="share_picker_not_allowed">O organizador non che permitiu compartir entradas deste evento.</string>
+    <string name="ticket_controls_title">Control do código</string>
+    <string name="ticket_visible_from">Verase a partir de %1$s.</string>
+    <string name="ticket_block">Bloquear o código</string>
+    <string name="ticket_unblock">Desbloquear</string>
+    <string name="ticket_block_revealed">Xa se viu, non se pode bloquear</string>
+    <string name="ticket_visible_day_before">Abrir o día antes do evento</string>
+    <string name="ticket_visibility_clear">Sen límite de tempo</string>
+    <string name="ticket_allow_share">Permitir que quen a teña a comparta</string>
 </resources>

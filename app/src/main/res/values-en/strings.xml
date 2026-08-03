@@ -380,4 +380,19 @@
     </plurals>
     <string name="sharing_documents_title">Original files</string>
     <string name="sharing_documents_explain">Turn it on and the file is uploaded to the server for anyone the event is shared with. Turn it off and it is not shared; whatever someone already downloaded stays theirs.</string>
+    <string name="ticket_locked_unpaid">The code cannot be seen yet: it is unpaid. It appears once the organiser marks it paid.</string>
+    <string name="ticket_locked_blocked">The organiser has the code blocked for now.</string>
+    <string name="ticket_locked_until">The code becomes visible from %1$s.</string>
+    <string name="ticket_return">Return the ticket</string>
+    <string name="ticket_returned_notice">Ticket returned.</string>
+    <string name="ticket_return_failed">The ticket could not be returned.</string>
+    <string name="share_picker_not_allowed">The organiser has not allowed you to share tickets from this event.</string>
+    <string name="ticket_controls_title">Barcode control</string>
+    <string name="ticket_visible_from">Visible from %1$s.</string>
+    <string name="ticket_block">Block the code</string>
+    <string name="ticket_unblock">Unblock</string>
+    <string name="ticket_block_revealed">Already seen, cannot be blocked</string>
+    <string name="ticket_visible_day_before">Open the day before the event</string>
+    <string name="ticket_visibility_clear">No time limit</string>
+    <string name="ticket_allow_share">Let the holder share it</string>
 </resources>

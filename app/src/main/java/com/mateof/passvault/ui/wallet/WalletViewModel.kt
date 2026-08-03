@@ -234,6 +234,26 @@ class WalletViewModel @Inject constructor(
         _openEvent.value = eventId
     }
 
+    /**
+     * What this phone is allowed to hand on for an event, over a tap.
+     *
+     * Sharing is the creator's to give: for an event this device made, everything is shareable. For
+     * one shared to this account, only the individual tickets the creator lent — and never the
+     * event as a whole — so a member cannot pass on somebody else's concert, only the seat they
+     * were given permission to. Offline and unsure, it lends nothing: better to refuse a share than
+     * to leak one the creator never allowed.
+     */
+    suspend fun sharePolicy(eventId: String): SharePolicy {
+        val createdHere = withContext(Dispatchers.IO) { repository.isCreatedHere(eventId) }
+        if (createdHere) return SharePolicy(canShareWholeEvent = true, permittedTicketIds = null)
+        if (!api.isSignedIn) return SharePolicy(canShareWholeEvent = false, permittedTicketIds = emptySet())
+        val status = withContext(Dispatchers.IO) {
+            runCatching { api.ticketStatuses(eventId) }.getOrNull()
+        }
+        val permitted = status?.tickets?.filter { it.sharePermitted }?.map { it.id }?.toSet()
+        return SharePolicy(canShareWholeEvent = false, permittedTicketIds = permitted ?: emptySet())
+    }
+
     private val _exported = MutableStateFlow<java.io.File?>(null)
 
     /** Where the last file was written, for the screen to hand to the system share sheet. */
@@ -457,8 +477,67 @@ class WalletViewModel @Inject constructor(
      * loads its own ticket as it is composed, and Compose composes the pages either side of the
      * current one, so the next ticket is already decrypted before a finger reaches it.
      */
-    suspend fun loadTicket(ticketId: String): com.mateof.passvault.ui.ticket.TicketDetail? =
-        withContext(Dispatchers.Default) { repository.detail(ticketId) }
+    suspend fun loadTicket(ticketId: String): com.mateof.passvault.ui.ticket.TicketDetail? {
+        val detail = withContext(Dispatchers.Default) { repository.detail(ticketId) } ?: return null
+        // The barcode is in the local log, but whether it may be shown is the server's to decide,
+        // and the creator's controls live there too. Consult it; a phone that cannot reach the
+        // server falls back to showing what it holds, which is the honest offline answer.
+        if (!api.isSignedIn) return detail
+        val createdHere = withContext(Dispatchers.IO) { repository.isCreatedHere(detail.eventId) }
+        val status = withContext(Dispatchers.IO) {
+            runCatching { api.ticketStatuses(detail.eventId) }.getOrNull()
+        }
+        val mine = status?.tickets?.firstOrNull { it.id == ticketId } ?: return detail
+        if (createdHere) {
+            // The creator always sees their own code, and gets the controls to decide everyone
+            // else's alongside it.
+            return detail.copy(
+                isCreator = true,
+                blocked = mine.blocked,
+                revealed = mine.revealed,
+                sharePermitted = mine.sharePermitted,
+                visibleFrom = mine.visibleFrom,
+            )
+        }
+        return detail.copy(
+            // Withheld here too, not only on the server: a phone that respects the gate is what
+            // makes "the holder cannot see it yet" true rather than merely claimed.
+            barcodeValue = if (mine.locked) null else detail.barcodeValue,
+            locked = mine.locked,
+            lockReason = mine.lockReason,
+            visibleFrom = mine.visibleFrom,
+            canReturn = !mine.revealed && mine.assignmentState != "FREE" && mine.holderUserId != null,
+        )
+    }
+
+    /** A creator's control over one ticket's barcode. Returns once the server has answered, so the
+     *  caller can reload the ticket and show the new state. */
+    suspend fun ticketControl(action: suspend (com.mateof.passvault.server.ServerApi) -> Unit): Boolean =
+        withContext(Dispatchers.IO) { runCatching { action(api) }.isSuccess }
+
+    /**
+     * Hands a seat back, while its barcode is still locked.
+     *
+     * On the server, because the seat belongs to the event and the return is the authority's to
+     * record — the same reason the lock is theirs to decide. A refusal (the code was already seen)
+     * comes back as a notice rather than a silent no.
+     */
+    fun returnTicket(ticketId: String, onDone: () -> Unit) {
+        viewModelScope.launch {
+            val done = withContext(Dispatchers.IO) { runCatching { api.returnTicket(ticketId) } }
+            done.fold(
+                onSuccess = {
+                    _notice.value = context.getString(com.mateof.passvault.R.string.ticket_returned_notice)
+                    com.mateof.passvault.sync.SyncScheduler.syncNow(context)
+                    onDone()
+                },
+                onFailure = {
+                    _notice.value = (it as? com.mateof.passvault.server.ServerException)?.message
+                        ?: context.getString(com.mateof.passvault.R.string.ticket_return_failed)
+                },
+            )
+        }
+    }
 
     private val _document = MutableStateFlow(com.mateof.passvault.ui.document.DocumentViewState())
     val document: StateFlow<com.mateof.passvault.ui.document.DocumentViewState> =
@@ -513,6 +592,14 @@ class WalletViewModel @Inject constructor(
         const val RENDER_WIDTH = 1080
     }
 }
+
+/**
+ * What a phone may hand on for one event over a tap.
+ *
+ * `permittedTicketIds` null means "all of them" — the creator's own event. A set names exactly the
+ * tickets a member was lent; empty means nothing here is theirs to share.
+ */
+data class SharePolicy(val canShareWholeEvent: Boolean, val permittedTicketIds: Set<String>?)
 
 sealed interface ImportOutcome {
     data class Imported(

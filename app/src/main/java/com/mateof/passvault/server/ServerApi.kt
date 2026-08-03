@@ -767,6 +767,68 @@ class ServerApi(private val settings: ServerSettings) {
         )
     }
 
+    // ── The creator's controls over a shared barcode, and the holder's return ─────────────
+
+    /**
+     * The server's view of an event's tickets, including the visibility gate.
+     *
+     * The wallet is built from the log, which carries the barcode; this is the second source the
+     * app consults for a ticket it holds in somebody else's event, because whether the code may be
+     * shown is the server's to decide and the server's clock that decides it. Returns the lock
+     * state per ticket and the server's time, so a countdown is measured against the authority.
+     */
+    fun ticketStatuses(eventId: String): TicketStatuses {
+        val result = call("/api/v1/events/$eventId/tickets")
+        val tickets = (result["tickets"] as? JsonArray).orEmpty().map { it.jsonObject }.map {
+            TicketStatus(
+                id = it.text("id").orEmpty(),
+                hasBarcode = it["barcode"]?.let { b -> b.jsonObject.isNotEmpty() } == true,
+                locked = it["locked"]?.jsonPrimitive?.content == "true",
+                lockReason = it.text("lockReason"),
+                visibleFrom = it.text("visibleFrom"),
+                blocked = it["blocked"]?.jsonPrimitive?.content == "true",
+                revealed = it["revealed"]?.jsonPrimitive?.content == "true",
+                sharePermitted = it["sharePermitted"]?.jsonPrimitive?.content == "true",
+                holderUserId = it.text("holderUserId"),
+                assignmentState = it.text("assignmentState").orEmpty(),
+            )
+        }
+        return TicketStatuses(tickets = tickets, serverTime = result.text("serverTime").orEmpty())
+    }
+
+    fun setTicketVisibility(ticketId: String, visibleFrom: String?, hoursBeforeEvent: Int?) {
+        call(
+            "/api/v1/tickets/$ticketId/visibility",
+            buildJsonObject {
+                if (visibleFrom != null) put("visibleFrom", visibleFrom) else put("visibleFrom", kotlinx.serialization.json.JsonNull)
+                if (hoursBeforeEvent != null) put("hoursBeforeEvent", hoursBeforeEvent)
+                else put("hoursBeforeEvent", kotlinx.serialization.json.JsonNull)
+            },
+            method = "PUT",
+        )
+    }
+
+    fun blockTicket(ticketId: String) {
+        call("/api/v1/tickets/$ticketId/block", buildJsonObject { })
+    }
+
+    fun unblockTicket(ticketId: String) {
+        call("/api/v1/tickets/$ticketId/unblock", buildJsonObject { })
+    }
+
+    fun setSharePermission(ticketId: String, permitted: Boolean) {
+        call(
+            "/api/v1/tickets/$ticketId/share-permission",
+            buildJsonObject { put("permitted", permitted) },
+            method = "PUT",
+        )
+    }
+
+    /** Hands a seat back, while the barcode is still locked to its holder. */
+    fun returnTicket(ticketId: String) {
+        call("/api/v1/tickets/$ticketId/return", buildJsonObject { })
+    }
+
     /**
      * Gives a group or a person access to an event.
      *
@@ -899,6 +961,22 @@ data class AccessEntry(
 
 /** What an authenticator needs, in the two forms one might be given it. */
 data class TotpEnrolment(val secret: String, val uri: String)
+
+/** The server's view of one ticket's visibility gate, for a barcode the log holds locally. */
+data class TicketStatus(
+    val id: String,
+    val hasBarcode: Boolean,
+    val locked: Boolean,
+    val lockReason: String?,
+    val visibleFrom: String?,
+    val blocked: Boolean,
+    val revealed: Boolean,
+    val sharePermitted: Boolean,
+    val holderUserId: String?,
+    val assignmentState: String,
+)
+
+data class TicketStatuses(val tickets: List<TicketStatus>, val serverTime: String)
 
 /** One enrolled authenticator app, as the profile lists it. */
 data class TotpAuthenticator(val id: String, val label: String?, val createdAt: String)
