@@ -102,6 +102,18 @@ interface WalletDao {
     suspend fun upsertTickets(tickets: List<TicketEntity>)
 
     /**
+     * Writes just a barcode onto an existing ticket, without touching the rest of the row.
+     *
+     * The barcode no longer rides inside the operation log — a code carried there would sync to
+     * every member of an event, defeating the point of withholding it — so it arrives by its own
+     * side-channel (the creator's own import, a phone-to-phone carrier, or a `.tkpak`) and is set
+     * here. A targeted update, because a projection recomputes the row from a log that no longer
+     * knows the code, and a full upsert would wipe it.
+     */
+    @Query("UPDATE tickets SET barcode_format = :format, barcode_cipher = :cipher WHERE id = :id")
+    suspend fun updateBarcode(id: String, format: String?, cipher: ByteArray?)
+
+    /**
      * The wallet list.
      *
      * A Flow, so a claim being confirmed updates the screen without anything asking for it.

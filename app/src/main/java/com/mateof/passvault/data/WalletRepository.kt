@@ -396,24 +396,61 @@ class WalletRepository(
             OperationType.EVENT_CREATE,
             buildJsonObject { put("name", eventName) },
         )
+        // The ticket id is minted here rather than inside the body so the barcode can be stored
+        // against it after projection. The barcode is deliberately NOT in the operation body: the
+        // log is pulled whole by every member of an event, so a code there would reach a device the
+        // creator means to withhold it from. It is kept locally and uploaded to the server by its
+        // own side-channel on the next sync.
+        val newBarcodes = mutableListOf<Triple<String, String, String>>()
         for (proposed in tickets) {
+            val ticketId = Ids.newId()
             log.append(
                 eventId,
                 OperationType.TICKET_ADD,
                 buildJsonObject {
-                    put("ticketId", Ids.newId())
+                    put("ticketId", ticketId)
                     put("label", proposed.suggestedLabel)
-                    proposed.barcode?.let {
-                        put("barcodeFormat", it.format)
-                        put("barcodeValue", it.value)
-                    }
                 },
             )
+            proposed.barcode?.let { newBarcodes.add(Triple(ticketId, it.format, it.value)) }
         }
 
         project(log.replay(eventId), now)
+        // After projection, because it creates the rows; a targeted write so the next projection,
+        // which recomputes from a log without the code, does not wipe it.
+        for ((ticketId, format, value) in newBarcodes) {
+            storeBarcode(ticketId, format, value)
+        }
         return tickets.size
     }
+
+    /**
+     * Puts a barcode onto a ticket that already exists, from a side-channel rather than the log.
+     *
+     * The single point where a code enters the wallet now that it does not travel in the operation
+     * that adds the ticket: a local import, a phone-to-phone carrier, a `.tkpak`. Encrypted at rest
+     * like every payload, and written on its own so a later projection leaves it be.
+     */
+    suspend fun storeBarcode(ticketId: String, format: String, value: String) {
+        dao.updateBarcode(ticketId, format, encrypt(value, "tickets", "barcode_cipher", ticketId))
+    }
+
+    /**
+     * The codes this device holds for an event, as plaintext, for the sync side-channel.
+     *
+     * The creator's device uploads these alongside its operations so the server can seal them and
+     * serve them on download. A device that holds no code for a seat — an assignee — contributes
+     * nothing, and the server ignores a code from anyone but the event's creator, so offering them
+     * here is safe.
+     */
+    suspend fun localBarcodes(eventId: String): List<Triple<String, String, String>> =
+        dao.ticketsForExport(eventId).mapNotNull { ticket ->
+            val format = ticket.barcodeFormat ?: return@mapNotNull null
+            val cipher = ticket.barcodeCipher ?: return@mapNotNull null
+            val value = decrypt(cipher, "tickets", "barcode_cipher", ticket.id)
+                ?: return@mapNotNull null
+            Triple(ticket.id, format, value)
+        }
 
     /**
      * Writes what the log says the wallet looks like.
@@ -442,8 +479,19 @@ class WalletRepository(
                 ),
             )
         }
+        // The barcode is no longer in the log, so replay does not carry it. A projection must not
+        // then wipe a code that arrived by its own side-channel — the creator's import, a
+        // phone-to-phone carrier, a `.tkpak` — so the existing code is read first and kept whenever
+        // replay has none of its own. (Tickets from before this change still carry theirs in an old
+        // operation, and those win, which is how a re-projection leaves them exactly as they were.)
+        val existingBarcodes = replayed.tickets
+            .map { it.eventId }
+            .distinct()
+            .flatMap { dao.ticketsForExport(it) }
+            .associate { it.id to Pair(it.barcodeFormat, it.barcodeCipher) }
         dao.upsertTickets(
             replayed.tickets.map { ticket ->
+                val kept = existingBarcodes[ticket.ticketId]
                 TicketEntity(
                     id = ticket.ticketId,
                     eventId = ticket.eventId,
@@ -453,10 +501,10 @@ class WalletRepository(
                     seatCipher = ticket.seat?.let {
                         encrypt(it, "tickets", "seat_cipher", ticket.ticketId)
                     },
-                    barcodeFormat = ticket.barcodeFormat,
+                    barcodeFormat = ticket.barcodeFormat ?: kept?.first,
                     barcodeCipher = ticket.barcodeValue?.let {
                         encrypt(it, "tickets", "barcode_cipher", ticket.ticketId)
-                    },
+                    } ?: kept?.second,
                     assignmentMode = "OPEN",
                     assignmentState = ticket.state.name,
                     holderLabelCipher = ticket.holder?.let {

@@ -99,7 +99,12 @@ class SyncEngine @Inject constructor(
             // The password the event is to be published under, if one was chosen. It can only be
             // set as the server creates the event, which for a wallet built offline is now.
             val chosen = settings.eventPassword(eventId)
-            val result = api.sync(eventId, mine, cursor = null, eventPassword = chosen)
+            // The codes this phone holds for the event, uploaded alongside the log rather than in
+            // it. The server seals them and serves them only on download; it takes them only from
+            // the creator, so a member offering theirs is harmlessly ignored. An assignee holds no
+            // code and sends none — which is the whole point.
+            val codes = if (eventId in local) wallet.localBarcodes(eventId) else emptyList()
+            val result = api.sync(eventId, mine, cursor = null, eventPassword = chosen, barcodes = codes)
             if (chosen != null && result.created) settings.setEventPassword(eventId, null)
             sent += mine.size
             if (result.created) published += 1

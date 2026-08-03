@@ -212,10 +212,15 @@ object Transfer {
      * whole log is also what the `.tkpak` transport does, and an event has hundreds of operations,
      * not millions.
      */
-    fun requestSync(peer: PairedPeer, operations: List<Operation>): SyncExchange {
+    fun requestSync(
+        peer: PairedPeer,
+        operations: List<Operation>,
+        barcodes: List<Triple<String, String, String>> = emptyList(),
+    ): SyncExchange {
         val request = buildJsonObject {
             put("kind", "sync.request")
             putJsonArray("operations") { operations.forEach { add(it.signedJson()) } }
+            putBarcodes(barcodes)
         }
         peer.session.send(request.toString().toByteArray(Charsets.UTF_8))
         return readExchange(parse(peer.session.receive()))
@@ -224,12 +229,42 @@ object Transfer {
     /** Reads a peer's request. The answering side of [requestSync]. */
     fun readRequest(peer: PairedPeer): SyncExchange = readExchange(parse(peer.session.receive()))
 
-    fun respond(peer: PairedPeer, operations: List<Operation>) {
+    fun respond(
+        peer: PairedPeer,
+        operations: List<Operation>,
+        barcodes: List<Triple<String, String, String>> = emptyList(),
+    ) {
         val response = buildJsonObject {
             put("kind", "sync.response")
             putJsonArray("operations") { operations.forEach { add(it.signedJson()) } }
+            putBarcodes(barcodes)
         }
         peer.session.send(response.toString().toByteArray(Charsets.UTF_8))
+    }
+
+    /**
+     * The codes, beside the log rather than inside it.
+     *
+     * The barcode no longer travels in the operation that adds a ticket — a code carried there would
+     * reach every device an event is pulled to. Between two phones this is a deliberate copy, so the
+     * sender does carry the codes, but as their own payload: `(ticketId, format, value)`, scoped to
+     * exactly the tickets being shared.
+     */
+    private fun kotlinx.serialization.json.JsonObjectBuilder.putBarcodes(
+        barcodes: List<Triple<String, String, String>>,
+    ) {
+        if (barcodes.isEmpty()) return
+        putJsonArray("barcodes") {
+            barcodes.forEach { (ticketId, format, value) ->
+                add(
+                    buildJsonObject {
+                        put("ticketId", ticketId)
+                        put("format", format)
+                        put("value", value)
+                    },
+                )
+            }
+        }
     }
 
     /**
@@ -296,12 +331,20 @@ object Transfer {
 
     private fun readExchange(message: JsonObject): SyncExchange {
         val operations = message["operations"]?.jsonArray.orEmpty()
+        val barcodes = message["barcodes"]?.jsonArray.orEmpty().mapNotNull {
+            val item = it.jsonObject
+            val ticketId = item.string("ticketId") ?: return@mapNotNull null
+            val format = item.string("format") ?: return@mapNotNull null
+            val value = item.string("value") ?: return@mapNotNull null
+            Triple(ticketId, format, value)
+        }
         return SyncExchange(
             kind = message.string("kind") ?: "",
             eventId = message.string("eventId"),
             cursor = message.string("cursor") ?: "",
             hasMore = message["hasMore"]?.jsonPrimitive?.content == "true",
             operations = operations.map { Operations.fromSignedJson(it.jsonObject) },
+            barcodes = barcodes,
         )
     }
 
@@ -358,4 +401,6 @@ data class SyncExchange(
     val cursor: String,
     val hasMore: Boolean,
     val operations: List<Operation>,
+    /** Codes carried beside the log: (ticketId, format, value), for the tickets being shared. */
+    val barcodes: List<Triple<String, String, String>> = emptyList(),
 )

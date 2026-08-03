@@ -361,6 +361,7 @@ class ServerApi(private val settings: ServerSettings) {
         operations: List<Operation>,
         cursor: String?,
         eventPassword: String?,
+        barcodes: List<Triple<String, String, String>> = emptyList(),
     ): SyncResult {
         val result = call(
             "/api/v1/sync/$eventId",
@@ -368,6 +369,22 @@ class ServerApi(private val settings: ServerSettings) {
                 putJsonArray("operations") { operations.forEach { add(it.signedJson()) } }
                 if (cursor != null) put("cursor", cursor)
                 if (eventPassword != null) put("eventPassword", eventPassword)
+                // The codes, alongside the log rather than inside it. The server seals these into
+                // storage and serves them only on download; it never puts them back in the log, so
+                // no other device is handed them. Ignored by the server unless we are the creator.
+                if (barcodes.isNotEmpty()) {
+                    putJsonArray("barcodes") {
+                        barcodes.forEach { (ticketId, format, value) ->
+                            add(
+                                buildJsonObject {
+                                    put("ticketId", ticketId)
+                                    put("format", format)
+                                    put("value", value)
+                                },
+                            )
+                        }
+                    }
+                }
             },
         )
         return SyncResult(

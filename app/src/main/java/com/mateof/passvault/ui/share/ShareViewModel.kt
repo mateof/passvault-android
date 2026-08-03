@@ -374,7 +374,20 @@ class ShareViewModel @Inject constructor(
     private fun exchange(peer: PairedPeer, isSender: Boolean) = kotlinx.coroutines.runBlocking {
         if (isSender) {
             val mine = offered()
-            Transfer.requestSync(peer, mine)
+            // The codes for the seats being shared, scoped to exactly those tickets — a code no
+            // longer rides in the operation that adds a ticket, so between two phones it travels
+            // beside the log as a deliberate copy. Filtered to the shared ticket ids so no unshared
+            // seat's code goes over the wire.
+            val sharedTicketIds = mine
+                .filter { it.type == com.mateof.passvault.sync.OperationType.TICKET_ADD }
+                .mapNotNull {
+                    (it.body["ticketId"] as? kotlinx.serialization.json.JsonPrimitive)?.content
+                }
+                .toSet()
+            val codes = mine.map { it.eventId }.distinct()
+                .flatMap { wallet.localBarcodes(it) }
+                .filter { it.first in sharedTicketIds }
+            Transfer.requestSync(peer, mine, codes)
             // The files, after the log, and only to a phone that speaks the document phase — an
             // older build reads as not speaking it, and the tickets still go without them.
             var sentDocuments = 0
@@ -413,6 +426,12 @@ class ShareViewModel @Inject constructor(
             // The log holding an operation is not the same as the user seeing a ticket.
             // Projecting here is what turns a successful exchange into something visible.
             wallet.projectAll()
+            // After projection creates the rows, seal in the codes that travelled beside the log —
+            // a targeted write the next projection leaves alone. This is what makes a phone-to-phone
+            // ticket usable at the gate without ever having put its code in the operation log.
+            for ((ticketId, format, value) in request.barcodes) {
+                wallet.storeBarcode(ticketId, format, value)
+            }
             _state.value = _state.value.copy(
                 stage = ShareStage.Done,
                 sentCount = 0,
