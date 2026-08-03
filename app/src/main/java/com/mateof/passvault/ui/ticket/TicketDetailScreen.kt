@@ -16,7 +16,9 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -50,6 +52,8 @@ data class TicketDetail(
     val lockReason: String? = null,
     /** The moment it opens, for a countdown measured against the server's clock. */
     val visibleFrom: String? = null,
+    /** For a held ticket: the server would serve the code now, so the screen may offer to download it. */
+    val barcodeAvailable: Boolean = false,
     /** Whether the holder may still hand it back — only while the code is still locked to them. */
     val canReturn: Boolean = false,
     /** Whether this device created the event, and so may work the controls below. */
@@ -58,6 +62,8 @@ data class TicketDetail(
     val blocked: Boolean = false,
     val revealed: Boolean = false,
     val sharePermitted: Boolean = false,
+    /** Creator's view: whether somebody currently holds this seat, so it can be unassigned. */
+    val hasHolder: Boolean = false,
     /** Whether it is paid, and who may see that, when the creator lets this viewer see it at all. */
     val paymentState: String? = null,
     val paymentVisibility: String? = null,
@@ -76,9 +82,22 @@ fun TicketDetailScreen(
     onVisibleDayBefore: () -> Unit = {},
     onClearVisibility: () -> Unit = {},
     onSetPayment: (String, String) -> Unit = { _, _ -> },
+    onSetVisibleFrom: (String?, Int?) -> Unit = { _, _ -> },
+    onAssign: (String) -> Unit = {},
+    onUnassign: () -> Unit = {},
+    onDownloadBarcode: suspend () -> com.mateof.passvault.server.ServerBarcode? = { null },
     modifier: Modifier = Modifier,
 ) {
     val spacing = LocalSpacing.current
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    // The held code once downloaded from the server. It is never in the local detail for a ticket
+    // held in someone else's event — fetching it is what marks it seen — so it lives here after a
+    // deliberate tap, and its presence also stands down the "return" that would no longer be honest.
+    var downloaded by remember(detail.id) {
+        mutableStateOf<com.mateof.passvault.server.ServerBarcode?>(null)
+    }
+    val shownFormat = detail.barcodeFormat ?: downloaded?.format
+    val shownValue = detail.barcodeValue ?: downloaded?.value
 
     Column(
         modifier = modifier
@@ -90,56 +109,66 @@ fun TicketDetailScreen(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(spacing.medium),
     ) {
-        if (detail.locked) {
-            // The code the phone holds but must not show yet, in the words the holder can act on.
-            // A time lock with a moment still ahead counts down; everything else is a plain reason.
-            val timeLock = detail.lockReason != "unpaid" &&
-                detail.lockReason != "blocked" &&
-                detail.visibleFrom != null
-            if (timeLock) {
-                LockCountdown(target = detail.visibleFrom!!)
-            } else {
-                Text(
-                    text = stringResource(
-                        when (detail.lockReason) {
-                            "unpaid" -> R.string.ticket_locked_unpaid
-                            "blocked" -> R.string.ticket_locked_blocked
-                            else -> R.string.ticket_locked_until
-                        },
-                        detail.visibleFrom?.let { whenText(it) } ?: "",
-                    ),
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.secondary,
-                    textAlign = TextAlign.Center,
-                )
+        if (shownValue == null) {
+            // No code on screen: say why, in the words the holder can act on, and offer the download
+            // when the server would allow it. A held code is never shown from the log — offline it
+            // waits — so this is the whole of the holder's path to seeing it.
+            when {
+                detail.locked -> {
+                    val timeLock = detail.lockReason != "unpaid" &&
+                        detail.lockReason != "blocked" &&
+                        detail.visibleFrom != null
+                    if (timeLock) {
+                        LockCountdown(target = detail.visibleFrom!!)
+                    } else {
+                        Text(
+                            text = stringResource(
+                                when (detail.lockReason) {
+                                    "unpaid" -> R.string.ticket_locked_unpaid
+                                    "blocked" -> R.string.ticket_locked_blocked
+                                    else -> R.string.ticket_locked_until
+                                },
+                                detail.visibleFrom?.let { whenText(it) } ?: "",
+                            ),
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.secondary,
+                            textAlign = TextAlign.Center,
+                        )
+                    }
+                }
+                detail.barcodeAvailable -> androidx.compose.material3.Button(
+                    onClick = { scope.launch { downloaded = onDownloadBarcode() } },
+                ) {
+                    Text(stringResource(R.string.ticket_download_code))
+                }
             }
-            if (detail.canReturn) {
-                // The way out while there is still nothing to keep: a locked ticket can be handed
-                // back, and once the code has been seen it cannot.
+            if (detail.canReturn && downloaded == null) {
+                // The way out while there is still nothing to keep: a held code not yet downloaded
+                // can be handed back, and once it has been seen it cannot.
                 TextButton(onClick = onReturn) {
                     Text(stringResource(R.string.ticket_return))
                 }
             }
         }
-        if (detail.barcodeValue != null) {
+        if (shownValue != null) {
             // The image needs a symbology; the payload does not. A ticket that arrived without a
             // declared format used to render nothing at all — no image and no text — so a perfectly
             // good ticket looked empty, and the holder would have found out at the gate. The
             // symbology is not guessed: drawing a QR for what was actually a PDF417 produces
             // something that looks scannable and is not, which is worse than no image.
-            if (detail.barcodeFormat != null) {
-                BarcodeImage(format = detail.barcodeFormat, payload = detail.barcodeValue)
+            if (shownFormat != null) {
+                BarcodeImage(format = shownFormat, payload = shownValue)
             }
             // The payload in text either way. When a scanner will not read — a scratched screen, bad
             // light, an old reader — somebody on the door types it in, and that is the difference
             // between getting in and not.
             Text(
-                text = detail.barcodeValue,
+                text = shownValue,
                 style = MaterialTheme.typography.labelLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center,
             )
-            if (detail.barcodeFormat == null) {
+            if (shownFormat == null) {
                 Text(
                     text = stringResource(R.string.ticket_no_format),
                     style = MaterialTheme.typography.bodySmall,
@@ -212,6 +241,9 @@ fun TicketDetailScreen(
                 onVisibleDayBefore = onVisibleDayBefore,
                 onClearVisibility = onClearVisibility,
                 onSetPayment = onSetPayment,
+                onSetVisibleFrom = onSetVisibleFrom,
+                onAssign = onAssign,
+                onUnassign = onUnassign,
             )
         }
     }
@@ -283,8 +315,45 @@ private fun CreatorControls(
     onVisibleDayBefore: () -> Unit,
     onClearVisibility: () -> Unit,
     onSetPayment: (String, String) -> Unit,
+    onSetVisibleFrom: (String?, Int?) -> Unit,
+    onAssign: (String) -> Unit,
+    onUnassign: () -> Unit,
 ) {
     val spacing = LocalSpacing.current
+    androidx.compose.material3.HorizontalDivider(
+        modifier = Modifier.padding(vertical = spacing.small),
+    )
+
+    // Give the seat to a person by their address — the only thing that lets them, and nobody else,
+    // download its code — or take it back while they have not yet done so.
+    Text(
+        text = stringResource(R.string.ticket_assign_title),
+        style = MaterialTheme.typography.titleSmall,
+    )
+    var email by remember(detail.id) { mutableStateOf("") }
+    androidx.compose.material3.OutlinedTextField(
+        value = email,
+        onValueChange = { email = it },
+        singleLine = true,
+        label = { Text(stringResource(R.string.ticket_assign_hint)) },
+        modifier = Modifier.fillMaxWidth(),
+    )
+    androidx.compose.material3.OutlinedButton(
+        onClick = { if (email.isNotBlank()) onAssign(email.trim()) },
+        enabled = email.isNotBlank(),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Text(stringResource(R.string.ticket_assign_to_account))
+    }
+    if (detail.hasHolder && !detail.revealed) {
+        androidx.compose.material3.OutlinedButton(
+            onClick = onUnassign,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text(stringResource(R.string.ticket_unassign))
+        }
+    }
+
     androidx.compose.material3.HorizontalDivider(
         modifier = Modifier.padding(vertical = spacing.small),
     )
@@ -380,6 +449,44 @@ private fun CreatorControls(
     ) {
         Text(stringResource(R.string.ticket_visible_day_before))
     }
+
+    // Open it a chosen span before the event — "unlock so many hours before" — rather than only the
+    // one-tap day-before. The relative rule follows a re-dated event, which is why it is offered
+    // beside an absolute moment rather than instead of it.
+    var hours by remember(detail.id) { mutableStateOf("") }
+    androidx.compose.foundation.layout.Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(spacing.small),
+    ) {
+        androidx.compose.material3.OutlinedTextField(
+            value = hours,
+            onValueChange = { new -> hours = new.filter { it.isDigit() }.take(4) },
+            singleLine = true,
+            label = { Text(stringResource(R.string.ticket_visible_hours_label)) },
+            keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                keyboardType = androidx.compose.ui.text.input.KeyboardType.Number,
+            ),
+            modifier = Modifier.weight(1f),
+        )
+        androidx.compose.material3.OutlinedButton(
+            onClick = { hours.toIntOrNull()?.let { onSetVisibleFrom(null, it) } },
+            enabled = hours.toIntOrNull() != null,
+        ) {
+            Text(stringResource(R.string.ticket_visible_hours_set))
+        }
+    }
+
+    // A fixed moment it opens — "block until this date" — picked with the platform's own date and
+    // time dialogs so there is no free-text instant to get wrong.
+    val context = androidx.compose.ui.platform.LocalContext.current
+    androidx.compose.material3.OutlinedButton(
+        onClick = { pickVisibleFrom(context) { iso -> onSetVisibleFrom(iso, null) } },
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Text(stringResource(R.string.ticket_visible_pick))
+    }
+
     androidx.compose.material3.OutlinedButton(
         onClick = onClearVisibility,
         modifier = Modifier.fillMaxWidth(),
@@ -401,6 +508,35 @@ private fun CreatorControls(
             style = MaterialTheme.typography.bodyMedium,
         )
     }
+}
+
+/**
+ * Chains the platform's date and time dialogs, handing back the chosen moment as a UTC ISO instant
+ * — the form the server's visibility gate expects. Native dialogs rather than a typed field, so
+ * there is no free-text instant for a creator to get wrong at the gate's expense.
+ */
+private fun pickVisibleFrom(context: android.content.Context, onPicked: (String) -> Unit) {
+    val now = java.util.Calendar.getInstance()
+    android.app.DatePickerDialog(
+        context,
+        { _, year, month, day ->
+            android.app.TimePickerDialog(
+                context,
+                { _, hour, minute ->
+                    val instant = java.time.LocalDateTime.of(year, month + 1, day, hour, minute)
+                        .atZone(java.time.ZoneId.systemDefault())
+                        .toInstant()
+                    onPicked(java.time.format.DateTimeFormatter.ISO_INSTANT.format(instant))
+                },
+                now.get(java.util.Calendar.HOUR_OF_DAY),
+                now.get(java.util.Calendar.MINUTE),
+                true,
+            ).show()
+        },
+        now.get(java.util.Calendar.YEAR),
+        now.get(java.util.Calendar.MONTH),
+        now.get(java.util.Calendar.DAY_OF_MONTH),
+    ).show()
 }
 
 /** A server instant as a local day and time, so "visible from" reads as a moment. */

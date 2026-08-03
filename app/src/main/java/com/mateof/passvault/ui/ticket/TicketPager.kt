@@ -50,6 +50,14 @@ fun TicketPager(
     onControl: suspend (String, TicketControl) -> Unit = { _, _ -> },
     /** Records who has paid and who may see it: (ticketId, state, visibility). */
     onSetPayment: suspend (String, String, String) -> Unit = { _, _, _ -> },
+    /** Sets when the code opens: (ticketId, absolute instant, hours-before) — one or the other. */
+    onSetVisibleFrom: suspend (String, String?, Int?) -> Unit = { _, _, _ -> },
+    /** Gives the seat to an account by address: (ticketId, email). */
+    onAssign: suspend (String, String) -> Unit = { _, _ -> },
+    /** Takes an assignment back: (ticketId). */
+    onUnassign: suspend (String) -> Unit = {},
+    /** Downloads the held code from the server, which is what marks it seen. */
+    onDownloadBarcode: suspend (String) -> com.mateof.passvault.server.ServerBarcode? = { null },
     modifier: Modifier = Modifier,
 ) {
     val pager = rememberPagerState(
@@ -123,6 +131,10 @@ fun TicketPager(
                 onReturn = { onReturn(shown) },
                 onControl = { control -> onControl(shown, control) },
                 onSetPayment = { state, visibility -> onSetPayment(shown, state, visibility) },
+                onSetVisibleFrom = { from, hrs -> onSetVisibleFrom(shown, from, hrs) },
+                onAssign = { email -> onAssign(shown, email) },
+                onUnassign = { onUnassign(shown) },
+                onDownloadBarcode = { onDownloadBarcode(shown) },
             )
         }
     }
@@ -146,6 +158,10 @@ private fun TicketPage(
     onReturn: () -> Unit,
     onControl: suspend (TicketControl) -> Unit,
     onSetPayment: suspend (String, String) -> Unit,
+    onSetVisibleFrom: suspend (String?, Int?) -> Unit,
+    onAssign: suspend (String) -> Unit,
+    onUnassign: suspend () -> Unit,
+    onDownloadBarcode: suspend () -> com.mateof.passvault.server.ServerBarcode?,
 ) {
     var detail by remember(ticketId) { mutableStateOf<TicketDetail?>(null) }
     // Bumped after a control acts, so the page reloads onto the state the server now reports.
@@ -177,6 +193,26 @@ private fun TicketPage(
                     reload += 1
                 }
             },
+            onSetVisibleFrom = { from, hrs ->
+                scope.launch {
+                    onSetVisibleFrom(from, hrs)
+                    reload += 1
+                }
+            },
+            onAssign = { email ->
+                scope.launch {
+                    onAssign(email)
+                    reload += 1
+                }
+            },
+            onUnassign = {
+                scope.launch {
+                    onUnassign()
+                    reload += 1
+                }
+            },
+            // No reload: the screen holds the downloaded code itself, and reloading would drop it.
+            onDownloadBarcode = { onDownloadBarcode() },
         )
     }
 }

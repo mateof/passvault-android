@@ -479,23 +479,21 @@ class WalletViewModel @Inject constructor(
      */
     suspend fun loadTicket(ticketId: String): com.mateof.passvault.ui.ticket.TicketDetail? {
         val detail = withContext(Dispatchers.Default) { repository.detail(ticketId) } ?: return null
-        // The barcode is in the local log, but whether it may be shown is the server's to decide,
-        // and the creator's controls live there too. Consult it; a phone that cannot reach the
-        // server falls back to showing what it holds, which is the honest offline answer.
-        if (!api.isSignedIn) return detail
         val createdHere = withContext(Dispatchers.IO) { repository.isCreatedHere(detail.eventId) }
-        val status = withContext(Dispatchers.IO) {
-            runCatching { api.ticketStatuses(detail.eventId) }.getOrNull()
-        }
-        val mine = status?.tickets?.firstOrNull { it.id == ticketId } ?: return detail
+
+        // A ticket this device created is the creator's own: they see its code online or off, and
+        // get the controls to decide everyone else's. Offline they simply lose the gate state.
         if (createdHere) {
-            // The creator always sees their own code, and gets the controls to decide everyone
-            // else's alongside it.
+            if (!api.isSignedIn) return detail.copy(isCreator = true)
+            val mine = withContext(Dispatchers.IO) {
+                runCatching { api.ticketStatuses(detail.eventId) }.getOrNull()
+            }?.tickets?.firstOrNull { it.id == ticketId } ?: return detail.copy(isCreator = true)
             return detail.copy(
                 isCreator = true,
                 blocked = mine.blocked,
                 revealed = mine.revealed,
                 sharePermitted = mine.sharePermitted,
+                hasHolder = mine.holderUserId != null,
                 visibleFrom = mine.visibleFrom,
                 paymentState = mine.paymentState,
                 paymentVisibility = mine.paymentVisibility,
@@ -503,19 +501,75 @@ class WalletViewModel @Inject constructor(
                 currency = mine.currency,
             )
         }
+
+        // A ticket held in somebody else's event. Whether its code may be shown is the server's to
+        // decide — but only for a ticket the server actually governs. A ticket it does not list is
+        // an offline copy handed over by tkpak or phone-to-phone, and that is ours to show as we
+        // hold it; withholding it would break the very offline sharing this app is built on.
+        if (!api.isSignedIn) return detail
+        val mine = withContext(Dispatchers.IO) {
+            runCatching { api.ticketStatuses(detail.eventId) }.getOrNull()
+        }?.tickets?.firstOrNull { it.id == ticketId } ?: return detail
+
+        val canReturn = !mine.revealed && mine.assignmentState != "FREE" && mine.holderUserId != null
+        if (mine.locked) {
+            return detail.copy(
+                barcodeValue = null,
+                barcodeFormat = null,
+                locked = true,
+                lockReason = mine.lockReason,
+                visibleFrom = mine.visibleFrom,
+                canReturn = canReturn,
+                paymentState = mine.paymentState,
+                amountCents = mine.amountCents,
+                currency = mine.currency,
+            )
+        }
+        // The server keeps a held seat's code out of the list and serves it on download — the
+        // controlled-assignment case, where downloading is what marks it seen and closes the
+        // creator's window to take it back. Everything else the server already served in the list,
+        // so the local copy stands.
+        if (mine.barcodeAvailable && !mine.hasBarcode) {
+            return detail.copy(
+                barcodeValue = null,
+                barcodeFormat = null,
+                barcodeAvailable = true,
+                visibleFrom = mine.visibleFrom,
+                canReturn = canReturn,
+                paymentState = mine.paymentState,
+                amountCents = mine.amountCents,
+                currency = mine.currency,
+            )
+        }
         return detail.copy(
-            // Withheld here too, not only on the server: a phone that respects the gate is what
-            // makes "the holder cannot see it yet" true rather than merely claimed.
-            barcodeValue = if (mine.locked) null else detail.barcodeValue,
-            locked = mine.locked,
-            lockReason = mine.lockReason,
             visibleFrom = mine.visibleFrom,
-            canReturn = !mine.revealed && mine.assignmentState != "FREE" && mine.holderUserId != null,
-            // Only what the creator lets this viewer see, which the server already decided.
             paymentState = mine.paymentState,
             amountCents = mine.amountCents,
             currency = mine.currency,
         )
+    }
+
+    /**
+     * Downloads a held ticket's code from the server — the only way it reaches the screen, and the
+     * act that marks it seen. Null when it cannot be had (locked, not entitled, or offline).
+     */
+    suspend fun downloadBarcode(ticketId: String): com.mateof.passvault.server.ServerBarcode? =
+        withContext(Dispatchers.IO) { api.fetchBarcode(ticketId) }
+
+    /**
+     * Gives a ticket to somebody by their address. Looks the account up first, because a typo is a
+     * ticket that silently never arrives. Returns false when no account holds the address.
+     */
+    suspend fun assignToAccount(ticketId: String, email: String): Boolean =
+        withContext(Dispatchers.IO) {
+            val userId = runCatching { api.lookupUserId(email.trim()) }.getOrNull()
+                ?: return@withContext false
+            runCatching { api.assignTicket(ticketId, userId) }.isSuccess
+        }
+
+    /** Says, once, that an address matched no account — the usual reason an assignment does nothing. */
+    fun notifyAssignFailed() {
+        _notice.value = context.getString(com.mateof.passvault.R.string.ticket_assign_not_found)
     }
 
     /** A creator's control over one ticket's barcode. Returns once the server has answered, so the

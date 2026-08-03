@@ -720,6 +720,14 @@ class ServerApi(private val settings: ServerSettings) {
         call("/api/v1/directory/lookup?email=" + java.net.URLEncoder.encode(email, "UTF-8"))["exists"]
             ?.jsonPrimitive?.content == "true"
 
+    /**
+     * The account id behind an address, for assigning a ticket to a person. Null when no active
+     * account holds it — a typo, or somebody who has not signed up, either way not assignable.
+     */
+    fun lookupUserId(email: String): String? =
+        call("/api/v1/directory/lookup?email=" + java.net.URLEncoder.encode(email, "UTF-8"))
+            .text("userId")
+
     /** Who an event is shared with, so sharing is something the organiser can look at. */
     fun eventAccess(eventId: String): List<AccessEntry> =
         (call("/api/v1/events/$eventId/access")["access"] as? JsonArray).orEmpty()
@@ -767,6 +775,27 @@ class ServerApi(private val settings: ServerSettings) {
         )
     }
 
+    /** Takes an assignment back, while the holder has not yet downloaded the code. */
+    fun unassignTicket(ticketId: String) {
+        call("/api/v1/tickets/$ticketId/unassign", buildJsonObject { })
+    }
+
+    /**
+     * Downloads one ticket's barcode from the server.
+     *
+     * This is the only way a holder's code reaches the screen: it is not in the list and, for a
+     * ticket held in somebody else's event, not to be trusted from the local log — the server is
+     * the authority on whether it may be seen, and asking is what marks it seen. Null when it
+     * cannot be had: locked, not entitled, or no connection.
+     */
+    fun fetchBarcode(ticketId: String): ServerBarcode? =
+        runCatching {
+            val result = call("/api/v1/tickets/$ticketId/barcode")
+            val format = result.text("format")
+            val value = result.text("value")
+            if (format != null && value != null) ServerBarcode(format, value) else null
+        }.getOrNull()
+
     // ── The creator's controls over a shared barcode, and the holder's return ─────────────
 
     /**
@@ -784,6 +813,7 @@ class ServerApi(private val settings: ServerSettings) {
             TicketStatus(
                 id = it.text("id").orEmpty(),
                 hasBarcode = it["barcode"]?.let { b -> b.jsonObject.isNotEmpty() } == true,
+                barcodeAvailable = it["barcodeAvailable"]?.jsonPrimitive?.content == "true",
                 locked = it["locked"]?.jsonPrimitive?.content == "true",
                 lockReason = it.text("lockReason"),
                 visibleFrom = it.text("visibleFrom"),
@@ -997,6 +1027,8 @@ data class TotpEnrolment(val secret: String, val uri: String)
 data class TicketStatus(
     val id: String,
     val hasBarcode: Boolean,
+    /** Whether a barcode download would succeed right now: the viewer is entitled and it is open. */
+    val barcodeAvailable: Boolean = false,
     val locked: Boolean,
     val lockReason: String?,
     val visibleFrom: String?,
@@ -1013,6 +1045,9 @@ data class TicketStatus(
 )
 
 data class TicketStatuses(val tickets: List<TicketStatus>, val serverTime: String)
+
+/** A barcode as the server hands it over on download: the format to draw, and the payload. */
+data class ServerBarcode(val format: String, val value: String)
 
 /** One enrolled authenticator app, as the profile lists it. */
 data class TotpAuthenticator(val id: String, val label: String?, val createdAt: String)

@@ -394,7 +394,17 @@
     <string name="ticket_unblock">Unblock</string>
     <string name="ticket_block_revealed">Already seen, cannot be blocked</string>
     <string name="ticket_visible_day_before">Open the day before the event</string>
+    <string name="ticket_visible_hours_label">Hours before</string>
+    <string name="ticket_visible_hours_set">Apply</string>
+    <string name="ticket_visible_pick">Pick date and time</string>
     <string name="ticket_visibility_clear">No time limit</string>
+    <string name="ticket_assign_title">Assignment</string>
+    <string name="ticket_assign_hint">Email of the person</string>
+    <string name="ticket_assign_to_account">Assign to account</string>
+    <string name="ticket_unassign">Unassign</string>
+    <string name="ticket_assign_not_found">No account holds that address.</string>
+    <string name="ticket_download_code">Download the code</string>
+    <string name="ticket_offline_download">Connect to view the code.</string>
     <string name="ticket_allow_share">Let the holder share it</string>
     <string name="payment_title">Payment</string>
     <string name="payment_paid">Paid</string>

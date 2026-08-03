@@ -394,7 +394,17 @@
     <string name="ticket_unblock">Desbloquear</string>
     <string name="ticket_block_revealed">Ya se ha visto, no se puede bloquear</string>
     <string name="ticket_visible_day_before">Abrir el día antes del evento</string>
+    <string name="ticket_visible_hours_label">Horas antes</string>
+    <string name="ticket_visible_hours_set">Aplicar</string>
+    <string name="ticket_visible_pick">Elegir fecha y hora</string>
     <string name="ticket_visibility_clear">Sin límite de tiempo</string>
+    <string name="ticket_assign_title">Asignación</string>
+    <string name="ticket_assign_hint">Correo de la persona</string>
+    <string name="ticket_assign_to_account">Asignar a la cuenta</string>
+    <string name="ticket_unassign">Retirar la asignación</string>
+    <string name="ticket_assign_not_found">No hay ninguna cuenta con esa dirección.</string>
+    <string name="ticket_download_code">Descargar el código</string>
+    <string name="ticket_offline_download">Conéctate para ver el código.</string>
     <string name="ticket_allow_share">Permitir que quien la tenga la comparta</string>
     <string name="payment_title">Pago</string>
     <string name="payment_paid">Pagada</string>

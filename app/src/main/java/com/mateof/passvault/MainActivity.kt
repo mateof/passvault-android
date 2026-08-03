@@ -559,6 +559,18 @@ private fun PassVaultApp(
                             api.setPayment(shown, state, visibility, null, null)
                         }
                     },
+                    onSetVisibleFrom = { shown, from, hrs ->
+                        viewModel.ticketControl { api ->
+                            api.setTicketVisibility(shown, visibleFrom = from, hoursBeforeEvent = hrs)
+                        }
+                    },
+                    onAssign = { shown, email ->
+                        if (!viewModel.assignToAccount(shown, email)) viewModel.notifyAssignFailed()
+                    },
+                    onUnassign = { shown ->
+                        viewModel.ticketControl { api -> api.unassignTicket(shown) }
+                    },
+                    onDownloadBarcode = { shown -> viewModel.downloadBarcode(shown) },
                 )
                 Screen.Notices -> NoticesPane(onMenu = openDrawer)
                 Screen.Groups -> GroupsPane(onMenu = openDrawer)
